@@ -71,6 +71,11 @@ Ramp inputs (fast: 1 count per 1500 cycles, slow: 1 count per 60000 cycles) on t
 
 * Bits 0-2, 6, 7 of file byte 29: F9, FA, FC, B8, 78 and FF run exactly the same code path as F8 and give identical display frames (400 of 400); only RAM 0x3C, 0x3F and 0xD5 differ. They are unused.
 
+## File bytes 12-19
+
+Setting each of them to FF and to 55 (checksums unchanged, they are not covered): same instructions executed, 400 of 400 identical display frames; only the matching RAM 0x2C-0x33 differs. The firmware
+never reads them as parameters; they are written only by the interface commands R and U. See docs/FIRMWARE.md.
+
 ## Fastmode - no EEPROM lever found
 
 The service bulletin ME-701763 ties the faster Fastmode to the ME-47455 processor and its own bar-code table. Nothing in the EEPROM, tried one byte

@@ -56,6 +56,20 @@ X/32 or X/2 (firmware byte 27 bit 7 = file byte 26 bit 7); after enough consecut
 measured value and the zero reference, and stores the result as record 1 (24 bits + checksum, written to EEPROM words 2-3).
 If firmware template byte 20 bit 7 (file byte 21) is set the measured value is written back into X instead (0xD00).
 
+## Interface commands that write the EEPROM (0x4BF, 0x800)
+
+The data interface (Ku1) delivers a command byte in RAM 0x79 (bit 6 set, an ASCII letter) and a payload in the buffer at RAM 0x2C. The dispatcher at 0x800 writes the EAROM from it. Tried in the emulator
+with a pattern in the buffer and each command injected into RAM 0x79:
+
+| command | effect on the EEPROM |
+|---|---|
+| `S` (0x53) | rewrites **all 16 words** (the whole image) from the buffer, then restarts at 0xE00. The balance also sits in a loop at 0xE58 after a failed integrity check waiting for exactly this command - it is how an exchanged board is loaded (service P/C board ME-73593) |
+| `R` (0x52), `U` (0x55) | write **file bytes 12-19** (words 6-9) from RAM 0x2C-0x33 |
+| `C` (0x43), `I` (0x49) | rewrite the unit word (file bytes 2-3) from RAM 0x22 |
+
+The table of letters `UUURICCC` sits at 0x4C2. Nothing in the service manual maps the bar-code lines to these commands. It means the "bar code reader" route in the service manual (Loading or writing over the EAROM) and a serial
+host can both rebuild an image, which is what this repository's tool does offline.
+
 ## Display
 
 `0x575-0x5F7` formats the weight into the display buffer using the seven-segment table at 0x333 and the unit/decimal-point

@@ -46,7 +46,7 @@ it was accepted. The tool changes **only** the checksum byte of the block you to
 | 6 [7] | checksum of record 1 |
 | 8, 9, 11 | calibration record 2: saved / factory copy (round numbers), within ~0.5 % of record 1; restored by `SUB_F03` **[rom]** |
 | 10 | checksum of record 2 |
-| 12-19 | zero in all dumps, not used by the paths read |
+| 12-19 | **not a parameter**: zero in all dumps and never used by the weighing code. At power-on they land in RAM 0x2C-0x33, which is the data-interface buffer and is overwritten. They are written only by the interface commands `R` and `U` (8 bytes from the interface buffer, 4 words at EAROM address 6) **[rom][emu]** |
 | 20 [21] | bits 0-2: **decimal-point code** - position class of the decimal point, combined with the unit. For grams: 1 = 3 decimals ... 4 = one decimal, **5 = integer** (and disables DeltaDisplay, see 4), 6/7 = `Error` **[rom][emu]**. Only moves the decimal point (the digits shown are identical for every code), so it cannot add resolution - see `research/RESULTS.md` |
 | 21 [20] | bits 0-1 **threshold** index {0x86,0x89,0xA3,0xC2} in the integration interrupt (a response/filter parameter); bits 2-3 **stability band** {8,4,2,12}; bits 4-5 **filter row** (table at 0x396); **bit 6 TEST MODE: display x2** (service manual "doubles values to facilitate adjustments"); bit 7 calibration copies the measured value into X **[rom][emu]** |
 | 23, 22, 25 [22,23,24] | **X = calibration weight** in internal units, 24-bit LSB first, **1 unit = 1/8 of a display digit**. PE3000-A 80000 = 10000 digits = 1 kg at 0.1 g; PE3000-B 240000 = 30000 digits = 3 kg; PE6000 160000 = 2 kg; PE16 4 kg. Calibration is accepted if the measured value is within X/32 (+-3.1 %) of X **[rom][hw]** |
@@ -137,4 +137,4 @@ CAL regenerates record 1. Scratch bytes 0-1 are rewritten on every standby.
 
 * the "faster weighing-in" half of Fastmode (service bulletin ME-701763): candidates are threshold / band / filter row in file byte 21
   (see `research/RESULTS.md` for sweeps), none confirmed;
-* file bytes 12-19, the exact use of the filter-row table.
+the exact use of the filter-row table.
