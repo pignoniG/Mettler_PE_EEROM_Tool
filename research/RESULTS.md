@@ -52,6 +52,17 @@ Metrics: displayed value, time until the stability counter drops, time until it 
   Filter row 3 gives a slightly earlier stable flag (1998 ms) but a slower convergence (1166 ms vs 966 ms to within 100 digits). The differences are 5-50 %, not the
   step change that "faster weighing-in" would need.
 
+## Display update speed - not an EEPROM setting
+
+Ramp inputs (fast: 1 count per 1500 cycles, slow: 1 count per 60000 cycles) on the PE6000 image, all 16 combinations of filter row and stability band (file byte 21 bits 2-5):
+
+* **Update rate:** 38 display changes in 3 M cycles (about 5 per second nominal, ~4 per second on the real 4.915 MHz crystal) for every variant. It is fixed by the ROM:
+  the interrupt routine counts 30 processing passes (the constant at ROM 0x1CE) before it signals a new reading.
+* **Lag behind the input:** filter rows 0, 1 and 2 are identical; row 3 lags about 35 % more. No band or threshold value changes it.
+  The rows differ only in the filter table at ROM 0x396 (indexed by the stability counter), where rows 0-2 share the unstable-state entries.
+* **A ROM patch would change it** (not possible on the mask-ROM part, emulator only): setting the constant at 0x1CE to 0x0F gives 74 updates, to 0x0A gives 109 - the update rate is simply proportional to 1/passes.
+  Fewer passes per reading means less averaging and so a noisier last digit, which the adaptive filter only partly hides.
+
 ## Fastmode - no EEPROM lever found
 
 The service bulletin ME-701763 ties the faster Fastmode to the ME-47455 processor and its own bar-code table. Nothing in the EEPROM, tried one byte
