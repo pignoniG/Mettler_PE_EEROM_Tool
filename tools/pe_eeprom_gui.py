@@ -23,18 +23,18 @@ MONO = ('Menlo', 12) if sys.platform == 'darwin' else ('Courier New', 11)
 
 # byte numbers are FILE (dump) byte numbers; the firmware reads each 16-bit word low byte first, so file bytes 2k, 2k+1
 # are firmware bytes 2k+1, 2k
-BYTE_HELP = {0: 'scratch: down-counter saved on standby (firmware byte 1); not configuration',
-             1: 'scratch: firmware flag register saved on standby (firmware byte 0); not configuration',
-             2: 'unit word, low half (80 in all known dumps)',
-             3: 'unit word: high nibble = the unit the user selected (a user setting)',
+BYTE_HELP = {0: 'scratch: hold-off counter saved on standby (firmware byte 1); 40 or more delays the first display after power-on, then recovers',
+             1: 'scratch: flag register, cleared at power-on - no effect',
+             2: 'unused (00 in all known dumps)',
+             3: 'unit word (80 in all dumps): high nibble = the unit the user selected (8 = grams), a user setting',
              6: 'CHECKSUM of calibration record 1 (file bytes 4-7 must sum to 0xAB)',
              10: 'CHECKSUM of calibration record 2 (file bytes 8-11 must sum to 0xAB)',
-             20: 'bits 0-2 decimal-point code (with the unit); code 5 = integer display, 6/7 = Error',
+             20: 'bits 0-2 decimal-point code (with the unit); code 5 = integer display, 6/7 = Error; bits 3-7 unused',
              21: 'bits 0-1 threshold, 2-3 stability band, 4-5 filter row, 6 TEST MODE (display x2), 7 learn-X',
-             28: 'unknown (FF in all known dumps)',
-             29: 'bit 3 = DeltaDisplay option bit (clear it, with byte 31 = 7F, to switch DeltaDisplay off); F8 in the family',
+             28: 'DeltaRange limit, middle byte (no effect with byte 31 = 7F)',
+             29: 'option byte (F8): bit 3 DeltaDisplay, bit 4 stability detector, bit 5 auto zero (clear = off); bits 0-2, 6, 7 unused. With byte 31 not 7F: DeltaRange limit, low byte',
              30: 'CHECKSUM of the template (file bytes 20-31 must sum to 0xAB)',
-             31: 'option gate: 7F in all known dumps (arms the option in byte 29)'}
+             31: '7F = no DeltaRange, byte 29 is the option byte; otherwise the top byte of the DeltaRange limit (07 in PE360/3600)'}
 for _i in (4, 5, 7): BYTE_HELP[_i] = 'calibration record 1 (24-bit, least significant first: bytes 5, 4, 7): the live calibration factor'
 for _i in (8, 9, 11): BYTE_HELP[_i] = 'calibration record 2 (bytes 9, 8, 11): saved / factory copy of the calibration factor'
 for _i in range(12, 20): BYTE_HELP[_i] = 'unused: zero in all known dumps'

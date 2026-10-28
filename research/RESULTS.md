@@ -81,6 +81,13 @@ never reads them as parameters; they are written only by the interface commands 
 With byte 31 = 7F, twelve values (FF, 00, single bits, 53, 7F) give identical displays. With a DeltaRange limit (byte 29 = 00, byte 31 = 00), byte 28 is the middle byte: 07 (224 digits), 0B (352) blank the last digit of a 356-digit reading;
 0D (416), 0E (448), 1F (992) do not, but still blank a 1067-digit reading; 2F (1504), 4F, 8F do not blank either. Each bit adds 32 x 2^bit digits.
 
+## Every remaining byte, every bit (file bytes 0-3 and 20-27)
+
+Each bit flipped in turn on the PE6000 image, noisy rest + two load steps + unloading; executed-PC set, display frames and RAM compared with the unmodified image. Summary in EEPROM_MAP.md ("Byte-by-byte check").
+Results worth recording: byte 0 bits 6-7 delay the first display after power-on (hold-off counter, recovers by itself); byte 1 and byte 2 have no effect; byte 3's high nibble is the unit, bit 3 adds a symbol;
+byte 20 bits 3-7 and byte 21 bit 7 (outside calibration) have no effect; X (bytes 22, 23, 25) and the limit's low bytes (24, 27) do not change the weighing display;
+**byte 26 bits 3-6 change the executed code in 88 places and 86 of 200 frames** - the limit's top byte reaching 13 (limit >= 106496 digits) switches to a different display-processing path (ROM 0xB6A).
+
 ## Fastmode - no EEPROM lever found
 
 The service bulletin ME-701763 ties the faster Fastmode to the ME-47455 processor and its own bar-code table. Nothing in the EEPROM, tried one byte
