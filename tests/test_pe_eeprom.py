@@ -64,33 +64,44 @@ class HardwareCase(unittest.TestCase):
 
 class Editing(unittest.TestCase):
     def test_set_record_roundtrip(self):
-        d = bytearray(ex('pe6000_own.bin'))
-        pe.set_record(d, 1, 0x123456)
-        self.assertEqual(pe.get24(d, 4), 0x123456)
+        d = pe.set_record(ex('pe6000_own.bin'), 1, 0x123456)
+        self.assertEqual(pe.record(d, 1)[0], 0x123456)
         self.assertEqual(sum(d[4:8]) & 255, pe.GOOD)
+        self.assertTrue(pe.valid(d))
 
-    def test_repair_adjust_31(self):
+    def test_firmware_order_is_pair_swapped(self):
+        d = ex('pe6000_own.bin')
+        self.assertEqual(pe.fw(d)[2:4], bytes([d[3], d[2]]))
+
+    def test_repair_touches_only_checksum_bytes(self):
         d = bytearray(ex('pe6000_own.bin'))
-        d[22] ^= 0x10
-        fixed = pe.repair(bytes(d), adjust=31)
+        d[23] ^= 0x10                                              # calibration weight byte
+        fixed = pe.repair(bytes(d))
         self.assertTrue(pe.valid(fixed))
-        self.assertEqual(fixed[30], d[30])
-        self.assertNotEqual(fixed[31], d[31])
+        self.assertEqual([i for i in range(32) if fixed[i] != d[i]], [30])
 
-    def test_cli_set_deltadisplay_and_test_mode(self):
+    def test_cli_deltadisplay_and_test_mode(self):
         with tempfile.TemporaryDirectory() as td:
             out = os.path.join(td, 'o.bin')
-            pe.main(['set', os.path.join(EX, 'pe16_forum.bin'), out, '--deltadisplay', 'off', '--test-mode', 'on'])
+            src = ex('pe6000_own.bin')
+            pe.main(['set', os.path.join(EX, 'pe6000_own.bin'), out, '--deltadisplay', 'off', '--test-mode', 'on'])
             n = rd(out)
             self.assertTrue(pe.valid(n))
-            self.assertEqual(n[21] & 7, 5)
-            self.assertTrue(n[20] & 0x40)
-            with self.assertRaises(SystemExit):                    # 'on' needs an explicit resolution code
-                pe.main(['set', out, out, '--deltadisplay', 'on'])
-            pe.main(['set', out, out, '--deltadisplay', 'on', '--code', '1', '--test-mode', 'off'])
+            self.assertEqual(n[29], src[29] & ~0x08 & 255)
+            self.assertEqual(n[31] & 0x7F, 0x7F)
+            self.assertTrue(n[21] & 0x40)
+            self.assertEqual(n[20], src[20])                       # decimal-point code untouched
+            pe.main(['set', out, out, '--deltadisplay', 'on', '--test-mode', 'off'])
             n = rd(out)
-            self.assertEqual((n[21] & 7, n[20] & 0x40), (1, 0))
             self.assertTrue(pe.valid(n))
+            self.assertEqual((n[29] & 8, n[21] & 0x40), (8, 0))
+
+    def test_matches_known_good_nodelta_file(self):
+        with tempfile.TemporaryDirectory() as td:
+            out = os.path.join(td, 'o.bin')
+            pe.main(['set', os.path.join(EX, 'pe6000_own.bin'), out, '--deltadisplay', 'off'])
+            n, o = rd(out), ex('pe6000_own.bin')
+            self.assertEqual([(i, o[i], n[i]) for i in range(32) if o[i] != n[i]], [(29, 0xF8, 0xF0), (30, 0x06, 0x0E)])
 
 
 class Build(unittest.TestCase):

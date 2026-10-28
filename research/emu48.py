@@ -275,13 +275,24 @@ class MCS48:
         self.cycles += 2 if ln == 2 else cyc
 
 
+def swap_pairs(d):
+    d = bytearray(d)
+    for i in range(0, len(d) - 1, 2):
+        d[i], d[i + 1] = d[i + 1], d[i]
+    return bytes(d)
+
+
 class Scale:
-    """ME-47455 firmware + simulated counter LSI / EAROM / display."""
+    """ME-47455 firmware + simulated counter LSI / EAROM / display.
+
+    The EEPROM image is taken in DUMP (file) order. The firmware reads each 16-bit word low byte first, so RAM byte
+    0x20+i holds file byte i^1; the swap is done here (file_order=False takes an image already in RAM order)."""
     INT_PERIOD = 333     # machine cycles between integration-cycle interrupts (~833 us at 2.5 us/cycle)
 
-    def __init__(self, rom_path, earom_image, count_fn=None):
-        self.cpu = MCS48(open(rom_path, 'rb').read())
-        self.earom = bytearray(earom_image)
+    def __init__(self, rom_path, earom_image, count_fn=None, file_order=True):
+        with open(rom_path, 'rb') as f:
+            self.cpu = MCS48(f.read())
+        self.earom = bytearray(swap_pairs(earom_image) if file_order else earom_image)
         self.writes = []
         self.count_fn = count_fn or (lambda cycle: 2048)
         self.latched = 2048
@@ -326,6 +337,18 @@ class Scale:
             return (self.latched >> 8) & 0x0F
         return 0xFF
 
+    def image(self):
+        """The EEPROM as it would be dumped (file order)."""
+        return swap_pairs(self.earom)
+
+    def power_on(self, standby_cycles=3_000_000, run_cycles=8_000_000):
+        """Normal power-on without a key held: the balance goes to standby (display OFF); the ON event (bit 7 of RAM 0x81,
+        which ends the standby loop at 0xEAB) then starts weighing."""
+        self.cpu.ext_p1 = 0xFF
+        self.run_cycles(standby_cycles)
+        self.cpu.ram[0x81] |= 0x80
+        self.run_cycles(run_cycles)
+
     def run_cycles(self, n, trace=None):
         c = self.cpu
         end = c.cycles + n
@@ -348,8 +371,11 @@ class Scale:
 
 
 if __name__ == '__main__':
-    rom, img = sys.argv[1], open(sys.argv[2], 'rb').read()
+    rom = sys.argv[1]
+    with open(sys.argv[2], 'rb') as f:
+        img = f.read()
     s = Scale(rom, img)
+    s.cpu.ext_p1 = 0xFE
     for i in range(20):
         s.run_cycles(20000)
         print(f"cycle {s.cpu.cycles:8d} pc={s.cpu.pc:03X} icount={s.cpu.icount:8d} display=[{s.display()}] raw={s.display_raw().hex()} ram8E={s.cpu.ram[0x8E]:02X}")

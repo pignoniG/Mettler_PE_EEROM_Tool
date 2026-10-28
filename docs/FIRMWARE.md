@@ -21,7 +21,7 @@ only, so that the claims in [EEPROM_MAP.md](EEPROM_MAP.md) can be checked agains
 
 | RAM | use |
 |---|---|
-| 0x20-0x3F | the EEPROM image (byte *i* of the dump at 0x20+*i*); 0x20 is then used as a flag register and 0x21 as a counter |
+| 0x20-0x3F | the EEPROM image; **dump (file) byte *i* is at 0x20 + (*i* XOR 1)** because words are read low byte first; 0x20 is then used as a flag register and 0x21 as a counter |
 | 0x40-0x42 | working copy of the live calibration factor |
 | 0x54-0x5B | display buffer (sign/ring symbol, then seven digits) |
 | 0xCD-0xD4 | display RAM scanned out by the interrupt routine (copied from 0x54-0x5B by `SUB_B3B`) |
@@ -37,7 +37,7 @@ divide at 0x200-0x2C8 and 0xA00-0xA9F), with constants fetched from a ROM table 
 Entered at each integration cycle of the counter LSI. It reads the LSI three times (port 1 bits 4-5 select the register: a dummy
 read, the low byte, then the high nibble with status), accumulates the counts in RAM 0xC1/0xC2, scans one display digit out
 (segments latched by P2.1, digit select by P2.0 from the table at 0x300), and every eight cycles calls the processing at 0x100.
-The processing reads template byte 20 for its thresholds and band constants and, every 30 passes, sets the "new reading" flag
+The processing reads firmware template byte 20 (file byte 21) for its thresholds and band constants and, every 30 passes, sets the "new reading" flag
 that the main loop at 0x400 waits for.
 
 ## EEPROM driver
@@ -51,19 +51,19 @@ that the main loop at 0x400 waits for.
 
 ## Calibration routine (0x905-0x9F1)
 
-Waits for a stable reading, subtracts template constant X (bytes 22-24) from it and requires the difference to be smaller than
-X/32 or X/2 (byte 27 bit 7); after enough consecutive good passes it multiplies X into the previous factor, divides by the
+Waits for a stable reading, subtracts template constant X (firmware bytes 22-24 = file bytes 23, 22, 25) from it and requires the difference to be smaller than
+X/32 or X/2 (firmware byte 27 bit 7 = file byte 26 bit 7); after enough consecutive good passes it multiplies X into the previous factor, divides by the
 measured value and the zero reference, and stores the result as record 1 (24 bits + checksum, written to EEPROM words 2-3).
-If template byte 20 bit 7 is set the measured value is written back into X instead (0xD00).
+If firmware template byte 20 bit 7 (file byte 21) is set the measured value is written back into X instead (0xD00).
 
 ## Display
 
-`0x575-0x5F7` formats the weight into the display buffer using the seven-segment table at 0x333 and the unit/resolution
-constants selected by bytes 2 and 21. Message strings (CAL, no, Unit, OFF, Error, ----) are seven-segment byte strings in the ROM at
+`0x575-0x5F7` formats the weight into the display buffer using the seven-segment table at 0x333 and the unit/decimal-point
+constants selected by the unit nibble and the code in file byte 20. Message strings (CAL, no, Unit, OFF, Error, ----) are seven-segment byte strings in the ROM at
 0xAF5-0xB2F and 0x35E-0x366. The DeltaDisplay blanking is at 0x5D1 (see EEPROM_MAP.md section 4).
 
 ## Inputs seen by the code (from the schematic and the code)
 
 P1.0 and P1.2 are read at power-on (0xE87): in the emulator, holding P1.0 low (the key line on the schematic) at power-on enters the
-unit-selection state, and releasing it continues to weighing; with P1.0 high the firmware goes to standby (display `OFF`). The
+unit-selection state (which rewrites the saved unit, so use `Scale.power_on()` for tests), and releasing it continues to weighing; with P1.0 high the firmware goes to standby (display `OFF`). The
 interrupt routine also samples P1 bits 2-3 (0x1D2-0x1F3), and the data-interface option is polled with MOVX at 0x3F.

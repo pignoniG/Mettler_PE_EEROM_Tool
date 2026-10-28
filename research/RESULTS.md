@@ -1,40 +1,40 @@
 # Emulator results
 
-All runs: the French PE3000 EEPROM image, checksum repaired after every edit, power-on with the key line held then released, a
-steady count, then a load step. Time figures are nominal (see [README.md](README.md)); only the comparisons between variants mean anything.
+**Correction.** An earlier version of this file used firmware byte numbers as if they were dump-file numbers (see EEPROM_MAP.md section 0)
+and so drew some wrong conclusions. Everything below is redone with **file byte numbers**, dumps loaded in file order, base image
+`examples/pe6000_own.bin`, a normal power-on (`Scale.power_on()`: standby, then the ON event), a steady count, then a noisy load step.
+Time figures are nominal; only comparisons between variants mean anything.
 
-## DeltaDisplay - solved
+## DeltaDisplay - solved, confirmed on hardware
 
-Only byte 21 changed (same noisy load step):
+| change (file bytes) | last digit blank in the emulator | notes |
+|---|---|---|
+| none (PE6000 as shipped) | 8 % of frames | |
+| byte 29 F8 -> F0 (byte 31 = 7F) | 0 % | **real PE6000: display no longer blanks**; nothing else changes |
+| byte 29 -> 00 | 0 % | same effect |
+| byte 20 = 05 (decimal-point code 5) | 0 % | also moves the decimal point to the last digit (5.3 -> 53) |
+| byte 21 changed (threshold/band bits) | still blanks, sensitivity differs | matches the real chip flashed with the wrong byte: blanking "less sensitive, still there" |
+| byte 31 = FF | blanks on every frame | bit 7 of the gate byte inverts the effect; do not use |
 
-| byte 21 | bits 0-2 | frames with the last digit blank | RAM 0x8E bit 1 |
-|---|---|---|---|
-| 0x05 (as shipped) | 5 | 0 | never set |
-| 0x01 / 0x21 | 1 | 7 | set during the transient |
-| 0x03 | 3 | 7 | set during the transient |
-| 0x04 | 4 | 7 | set during the transient |
+## Test mode, calibration weight
 
-Code 5 disables DeltaDisplay. Byte 21 bits 0-2 also select the base resolution constant, so the display scaling can change with them.
+* File byte 21 bit 6 doubles the displayed value (1067 -> 2134 for the same input): the service manual's service mode.
+* File bytes 23, 22, 25 are the calibration weight X in units of 1/8 digit; see EEPROM_MAP.md.
 
-## Test mode - confirmed
+## Every other single-byte change, file bytes 12-31 (all bit flips + 00 + FF, 2 noise seeds)
 
-Byte 20 bit 6 set doubles the displayed value for the same input (27877 -> 55755), matching the service manual's service mode.
+Metrics: displayed value, time until the stability counter drops, time until it is stable again, convergence, rest flicker, blank fraction.
 
-## Byte 20 and settling speed - no Fastmode switch found
+* **No byte in 12-19 does anything** in this model (the loader staging area, unused by the weighing path).
+* Bytes 22-25, 27-28: no effect on settling or display (the weight/limit bytes matter for calibration and overload, not modelled by the sweep).
+* File byte 26 (limit, high part): changing low bits slightly raises the blank fraction (0.08 -> 0.13), no other effect.
+* **File byte 21 selectors, all 64 combinations of bits 0-5:** threshold index 0-2: no effect on settling; **index 3 (0xC2): the display becomes unreadable in the emulator -
+  avoid**. Stability band: 12 (index 3, PE6000 default) and 8 (index 0) settle in 2031 ms; 4 (index 1) 2031-2098 ms; 2 (index 2) 2264 ms - a stricter band is slower.
+  Filter row 3 gives a slightly earlier stable flag (1998 ms) but a slower convergence (1166 ms vs 966 ms to within 100 digits). The differences are 5-50 %, not the
+  step change that "faster weighing-in" would need.
 
-Smooth exponential load step, no noise (stability = the stability counter RAM 0x8D falls below 0x20 and returns to 0x7F):
+## Fastmode - no EEPROM lever found
 
-| byte 20 | time to stable | displayed value within 1000 digits | within 1 digit |
-|---|---|---|---|
-| 0x04 (as shipped), 0x00, 0x01, 0x02, 0x08, 0x0C, 0x20, 0x40, 0x80 | 1965 ms (same for all) | 1099 ms | about 9.3 s |
-| 0x10 | same | 1099 ms | about 9.1 s |
-| 0x30 | 2338 ms | 1299 ms | about 9.9 s |
-| 0x03 | display becomes unreadable | | |
-
-So bits 0-3 do not change how fast the reading is declared stable in this test, and bits 4-5 change convergence only slightly.
-An early result suggesting 0x08/0x10 were nine times faster was an artifact of the stability counter already decaying when the step began.
-
-## Template bytes 23-29, one at a time, with noise - in progress
-
-`python3 sweep.py 23 29 --seeds 3` (every single-bit flip plus 00 and FF of each byte; metrics: displayed value for the same load,
-time to unstable and stable, time to settle within 100 digits, rest flicker, blanking). The table will be added here when the run finishes.
+The service bulletin ME-701763 ties the faster Fastmode to the ME-47455 processor and its own bar-code table. Nothing in the EEPROM, tried one byte
+at a time, produces a markedly faster settling than the PE6000/PE16 values; the DeltaDisplay half of Fastmode is the byte 29 bit 3 option.
+Combinations of two bytes and the real counter hardware are not modelled, so a lever could still hide there.

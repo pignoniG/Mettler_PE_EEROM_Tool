@@ -1,54 +1,54 @@
 {
- "comment": "Model/mode templates (bytes 2-3 and 20-31) taken from real dumps. Bytes 20-29 are identical for all units of a model in the same configuration (two independent PE6000 units agree); byte 30/31 only carry the checksum. See EEPROM_MAP.md.",
+ "comment": "Model/mode templates (file bytes 2-3 and 20-31, in dump order) taken from real dumps. File bytes 20-29 and 31 are identical for all units of a model in the same configuration (two independent PE6000 units agree); file byte 30 only carries the checksum. X is the calibration weight and 'limit' the range limit, both in internal units of 1/8 display digit. See EEPROM_MAP.md.",
  "templates": [
   {
    "name": "PE1600",
    "bytes_2_3": "0080",
    "bytes_20_31": "03003500d00c138afff8847f",
    "source": "own dump (file named pe1600)",
-   "notes": "Exact model identity not independently confirmed."
+   "notes": "Calibration weight 100000 digits (1000.00 g at 0.01 g readability); range limit 1600.90 g."
   },
   {
    "name": "PE3000-A",
    "bytes_2_3": "0080",
    "bytes_20_31": "04053880080103c9fff89f7f",
    "source": "own dump, scale whose EEPROM could no longer be reprogrammed",
-   "notes": "Contents are fully valid. Differs from PE3000-B only in bytes 22, 25 (and checksum byte 30)."
+   "notes": "Calibration weight 10000 digits = 1 kg at 0.1 g readability. Differs from PE3000-B only in the calibration weight and the checksum byte."
   },
   {
    "name": "PE3000-B",
    "bytes_2_3": "0080",
    "bytes_20_31": "0405a980080303c9fff82c7f",
    "source": "own dump, French-market PE3000",
-   "notes": "Original chip. Bytes 22/25 differ from PE3000-A by +113 / +2."
+   "notes": "French-market PE3000. Calibration weight 30000 digits = 3 kg at 0.1 g readability (the window is +-3.1 %, so the balance wants about 3 kg)."
   },
   {
    "name": "PE6000",
    "bytes_2_3": "0080",
    "bytes_20_31": "042c710010020775fff8067f",
    "source": "own dump; independent forum PE6000 has the same bytes 20-29",
-   "notes": ""
+   "notes": "Calibration weight 20000 digits = 2 kg at 0.1 g readability; range limit 6109.0 g. An independent forum dump has the same template."
   },
   {
    "name": "PE16",
    "bytes_2_3": "0080",
    "bytes_20_31": "0421e200d004138afff8bd7f",
    "source": "2006 forum post (David Smith)",
-   "notes": ""
+   "notes": "Calibration weight 40000 digits = 4 kg at 0.1 g readability (the service manual lists a 4 kg weight for the PE16); range limit 16009.0 g."
   },
   {
    "name": "PE360",
    "bytes_2_3": "0080",
    "bytes_20_31": "02113500d00c2bf453000e07",
    "source": "2006 forum post (David Smith)",
-   "notes": "Different family (bytes 28-31 differ in form from the PE11..PE6000 group)."
+   "notes": "Different family: file bytes 28-31 are not FF F8 .. 7F. Calibration weight 100000 digits (100.000 g at 0.001 g readability); range limit 360.090 g."
   },
   {
    "name": "PE3600",
    "bytes_2_3": "0080",
    "bytes_20_31": "03053500d00c2bf453001907",
    "source": "2006 forum post (David Smith)",
-   "notes": "Different family, as PE360."
+   "notes": "Different family, as PE360. Calibration weight 100000 digits (1000.00 g at 0.01 g readability); range limit 3600.90 g."
   }
  ]
 }

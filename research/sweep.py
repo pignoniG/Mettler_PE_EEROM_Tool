@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Sweep EAROM template bytes in the emulator with a noisy load step and report how each change alters behaviour.
 
-  python3 sweep.py [first_byte last_byte] [--seeds N]
+  python3 sweep.py [first_file_byte last_file_byte]  (FILE byte numbers; default 12 31) [--seeds N]
 
 Metrics per variant (median over noise seeds):
   gain      final displayed value for the same load (scale / resolution changes show up here)
@@ -22,7 +22,7 @@ from pe_eeprom import repair
 
 # The CPU firmware is Mettler's and is not distributed: dump your own (docs/DUMPING_THE_CPU.md) into research/rom/
 ROM = os.path.join(HERE, 'rom', 'ME-47455_INS8050.bin')
-with open(os.path.join(HERE, '..', 'examples', 'pe3000_B_french_original.bin'), 'rb') as _f:
+with open(os.path.join(HERE, '..', 'examples', 'pe6000_own.bin'), 'rb') as _f:
     BASE = _f.read()
 DIG = {0x3F: 0, 0x06: 1, 0x5B: 2, 0x4F: 3, 0x66: 4, 0x6D: 5, 0x7D: 6, 0x07: 7, 0x7F: 8, 0x6F: 9, 0x00: 0}
 MS = 2.5e-3          # ms per machine cycle
@@ -42,7 +42,7 @@ def make(edits):
     d = bytearray(BASE)
     for k, v in edits.items():
         d[k] = v
-    return bytes(repair(d, 30))
+    return bytes(repair(bytes(d)))
 
 
 def run_one(args):
@@ -59,12 +59,9 @@ def run_one(args):
                 base += DELTA * (1 - math.exp(-(cyc - st['t0']) / TAU))
             return round(base + rnd.gauss(0, SIGMA))
 
-        s = Scale(ROM, img, count_fn=counts)
+        s = Scale(ROM, img, count_fn=counts)          # img is in dump (file) order
         c = s.cpu
-        c.ext_p1 = 0xFE
-        s.run_cycles(2_500_000)
-        c.ext_p1 = 0xFF
-        s.run_cycles(4_000_000)
+        s.power_on()
         ok = False
         for _ in range(60):
             s.run_cycles(100_000)
@@ -136,13 +133,15 @@ def summarise(results):
 
 if __name__ == '__main__':
     args = [a for a in sys.argv[1:] if not a.startswith('--')]
-    first, last = (int(args[0]), int(args[1])) if len(args) >= 2 else (23, 29)
+    first, last = (int(args[0]), int(args[1])) if len(args) >= 2 else (12, 31)
     seeds = 3
     for i, a in enumerate(sys.argv):
         if a == '--seeds':
             seeds = int(sys.argv[i + 1])
     variants = [('baseline', {})]
     for b in range(first, last + 1):
+        if b in (6, 10, 30):
+            continue                                  # checksum bytes are recomputed
         orig = BASE[b]
         vals = []
         for bit in range(8):

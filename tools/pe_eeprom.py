@@ -2,14 +2,21 @@
 """pe_eeprom - decode, verify, edit and rebuild the 32-byte parameter EEPROM (MCM2801 EAROM) of Mettler PE balances.
 
 The format was read out of the CPU firmware (ME-47455 V4.1, INS8050); see EEPROM_MAP.md for the evidence.
-Integrity rule enforced by the balance at power-on (any failure -> ERROR):
 
-    0x55 + sum(bytes) == 0  (mod 256)   for   bytes 4-7, bytes 8-11 and bytes 20-31
+BYTE ORDER - the thing to know first.  The firmware reads every 16-bit word low byte first, so the byte it calls RAM
+0x20+i is byte  i XOR 1  of a normal dump (bytes 0<->1, 2<->3, ...).  The checksums cannot show this (they are blind to
+swapping the two bytes of a word), but every quantity in the image only makes sense in the firmware's order: the
+calibration weight, the range limit and the calibration factors are round numbers there and nonsense in file order.
+This tool takes and writes files in DUMP order (what your programmer saves) and does all decoding in firmware order.
+Byte numbers on the command line are FILE byte numbers; EEPROM_MAP.md lists both.
+
+Integrity rule enforced by the balance at power-on (any failure -> ERROR):
+    0x55 + sum(bytes) == 0 (mod 256)    for the blocks  4-7, 8-11 and 20-31
 
 Commands:
     info FILE                      decode a dump, show checksum state and the closest known template
     verify FILE                    exit status 0 if all three sums are good
-    fix IN OUT [--adjust 30|31]    recompute the checksum bytes (7, 11 and 30 or 31)
+    fix IN OUT                     recompute the checksum bytes
     set IN OUT [options]           edit fields or raw bytes, then repair the checksums
     build --template NAME --out F  construct an image from a known template
     diff A B                       show differing bytes
@@ -24,24 +31,32 @@ import os
 import sys
 
 SIZE = 32
-GOOD = 0xAB                       # sum of each checked block, mod 256
-REC = {1: 4, 2: 8}                # start of calibration record 1 / 2 (3 value bytes + 1 checksum byte)
-TEMPLATE = (20, 32)
-THRESHOLDS = (0x86, 0x89, 0xA3, 0xC2)   # ROM table 0x309, selected by byte 20 bits 0-1
-BANDS = (8, 4, 2, 12)                    # ROM table 0x3B7, selected by byte 20 bits 2-3
-DELTADISPLAY_OFF_CODE = 5                # byte 21 bits 0-2
+GOOD = 0xAB                         # sum of each checked block, mod 256
+THRESHOLDS = (0x86, 0x89, 0xA3, 0xC2)   # ROM table 0x309, selected by firmware byte 20 bits 0-1
+BANDS = (8, 4, 2, 12)                    # ROM table 0x3B7, selected by firmware byte 20 bits 2-3
 HERE = os.path.dirname(os.path.abspath(__file__))
 TEMPLATES_JSON = os.path.join(HERE, 'templates.json')
+DIGIT_UNITS = 8                          # internal units per display digit (X and the limit are 8 x digits)
 
 
-# ----------------------------------------------------------------------------- basic image handling
+# ----------------------------------------------------------------------------- byte order
 def swap_pairs(d):
+    """File (dump) order <-> firmware (RAM) order. It is its own inverse."""
     d = bytearray(d)
     for i in range(0, len(d) - 1, 2):
         d[i], d[i + 1] = d[i + 1], d[i]
     return bytes(d)
 
 
+fw = swap_pairs
+
+
+def fidx(i):
+    """File index of firmware byte i (and vice versa)."""
+    return i ^ 1
+
+
+# ----------------------------------------------------------------------------- checks
 def sums(d):
     return {'record 1 (bytes 4-7)': sum(d[4:8]) & 255,
             'record 2 (bytes 8-11)': sum(d[8:12]) & 255,
@@ -55,20 +70,19 @@ def valid(d):
 SWAP_MODE = 'auto'       # 'auto' | 'yes' | 'no' (set by the --swapped option)
 
 
-def looks_swapped(raw):
-    """Swapping the two bytes of every word does NOT change the checksums (the checked blocks are pair-aligned),
-    so it cannot be detected that way. All known dumps have 00 80 in bytes 2-3, which swapped reads 80 00."""
+def looks_firmware_order(raw):
+    """Files saved by a programmer that already swaps the words have 80 00 where every dump has 00 80 (bytes 2-3)."""
     return raw[2:4] == b'\x80\x00'
 
 
 def load(path):
-    """Read a dump. Returns (data, swapped). Some programmers save each 16-bit word byte-swapped; 'swapped' tells
-    save() to write the file back in the same order it came in."""
+    """Read a dump and return (data in dump order, was_swapped). `was_swapped` tells save() to write the file back
+    in the order it came in."""
     with open(path, 'rb') as f:
         raw = f.read()
     if len(raw) != SIZE:
         raise SystemExit(f'{path}: expected {SIZE} bytes, got {len(raw)}')
-    swapped = {'yes': True, 'no': False}.get(SWAP_MODE, looks_swapped(raw))
+    swapped = {'yes': True, 'no': False}.get(SWAP_MODE, looks_firmware_order(raw))
     return (swap_pairs(raw) if swapped else raw), swapped
 
 
@@ -77,33 +91,68 @@ def save(path, d, swapped=False):
         f.write(swap_pairs(d) if swapped else bytes(d))
 
 
-def get24(d, i):
-    return d[i] | (d[i + 1] << 8) | (d[i + 2] << 16)
+# ----------------------------------------------------------------------------- firmware-order accessors
+def get24(r, i):
+    """24-bit value, least significant byte first, at firmware index i."""
+    return r[i] | (r[i + 1] << 8) | (r[i + 2] << 16)
 
 
-def put24(d, i, v):
+def put24(r, i, v):
     if not 0 <= v <= 0xFFFFFF:
         raise ValueError('24-bit value out of range')
-    d[i], d[i + 1], d[i + 2] = v & 255, (v >> 8) & 255, (v >> 16) & 255
+    r[i], r[i + 1], r[i + 2] = v & 255, (v >> 8) & 255, (v >> 16) & 255
+
+
+REC = {1: 4, 2: 8}          # firmware index of a calibration record: 3 value bytes, then the checksum byte
+
+
+def record(d, which):
+    r = fw(d)
+    i = REC[which]
+    return get24(r, i), r[i + 3]
+
+
+def modify(d, fn):
+    """Apply fn to a bytearray in firmware order and return the result in dump order."""
+    r = bytearray(fw(d))
+    fn(r)
+    return fw(bytes(r))
 
 
 def set_record(d, which, value):
     i = REC[which]
-    put24(d, i, value)
-    d[i + 3] = (GOOD - sum(d[i:i + 3])) & 255
+
+    def f(r):
+        put24(r, i, value)
+        r[i + 3] = (GOOD - sum(r[i:i + 3])) & 255
+    return modify(d, f)
 
 
-def repair(d, adjust=30, records=True):
-    """Return a copy with the checksum bytes recomputed: bytes 7 and 11, and byte `adjust` (30 or 31)."""
-    if adjust not in (30, 31):
-        raise ValueError('adjust must be 30 or 31')
-    d = bytearray(d)
-    if records:
-        for w in (1, 2):
-            i = REC[w]
-            d[i + 3] = (GOOD - sum(d[i:i + 3])) & 255
-    d[adjust] = (d[adjust] + GOOD - sum(d[20:32])) & 255
-    return bytes(d)
+def repair(d):
+    """Recompute the three checksum bytes the way the firmware does: firmware bytes 7 and 11 for the records and 31
+    (file byte 30) for the template. Everything else is left alone."""
+    def f(r):
+        r[7] = (GOOD - sum(r[4:7])) & 255
+        r[11] = (GOOD - sum(r[8:11])) & 255
+        r[31] = (GOOD - sum(r[20:31])) & 255
+    return modify(d, f)
+
+
+def fields(d):
+    """Decoded parameters (from the firmware-order view)."""
+    r = fw(d)
+    limit = get24(r, 25)
+    return {
+        'unit_word': (r[2], r[3]),
+        'record1': get24(r, 4), 'record2': get24(r, 8),
+        'threshold_idx': r[20] & 3, 'band_idx': (r[20] >> 2) & 3, 'filter_row': (r[20] >> 4) & 3,
+        'test_mode': bool(r[20] & 0x40), 'learn': bool(r[20] & 0x80),
+        'code': r[21] & 7,
+        'x': get24(r, 22), 'limit': limit & 0x7FFFFF, 'window_half': bool(r[27] & 0x80),
+        'dd_option_off': (r[30] & 0x7F) == 0x7F and not (r[28] & 0x08),
+        'dd_option_active': (r[30] & 0x7F) == 0x7F,
+        'r28': r[28], 'r29': r[29], 'r30': r[30],
+    }
 
 
 # ----------------------------------------------------------------------------- templates library
@@ -117,12 +166,12 @@ def template_bytes(t):
 
 
 def closest(d, n=3):
-    """Known templates ranked by the number of differing bytes in 2-3 and 20-29 (30/31 are checksum bytes)."""
+    """Known templates ranked by differing bytes (file bytes 2-3 and 20-29, 31; byte 30 is the checksum)."""
     out = []
     for t in load_templates():
         b23, b2031 = template_bytes(t)
         diff = [i for i in (2, 3) if d[i] != b23[i - 2]]
-        diff += [i for i in range(20, 30) if d[i] != b2031[i - 20]]
+        diff += [i for i in range(20, 32) if i != 30 and d[i] != b2031[i - 20]]
         out.append((len(diff), t['name'], diff, t))
     out.sort(key=lambda x: x[0])
     return out[:n]
@@ -130,42 +179,48 @@ def closest(d, n=3):
 
 # ----------------------------------------------------------------------------- decoding
 def describe(d):
+    f = fields(d)
     L = []
-    s = sums(d)
-    L.append('Checksums (each block must sum to 0xAB):')
-    for k, v in s.items():
+    L.append('Checksums (each block must sum to 0xAB; checksum bytes are file bytes 6, 10 and 30):')
+    for k, v in sums(d).items():
         L.append(f'  {k:24s} sum=0x{v:02X}  {"OK" if v == GOOD else "BAD"}')
     L.append('')
-    L.append(f'Bytes 0-1  : {d[0]:02X} {d[1]:02X}   scratch (flag register / counter saved on standby; not configuration)')
-    L.append(f'Bytes 2-3  : {d[2]:02X} {d[3]:02X}   byte 2 high nibble = saved unit index (user setting)')
+    L.append(f'Scratch (file bytes 1, 0): flag register 0x{d[1]:02X}, counter 0x{d[0]:02X} - saved on standby, not configuration')
+    L.append(f'Unit word  (file bytes 3, 2): 0x{d[3]:02X}{d[2]:02X}   saved unit = {d[3] >> 4}  (8 = grams in every known dump)')
+    r = fw(d)
     for w in (1, 2):
-        i = REC[w]
-        L.append(f'Record {w}   : value 0x{get24(d, i):06X} ({get24(d, i):>8d}) checksum byte 0x{d[i + 3]:02X}'
-                 + ('   <- live calibration factor, rewritten by the CAL routine' if w == 1 else '   <- saved / fallback copy'))
-    b20, b21 = d[20], d[21]
+        v, c = record(d, w)
+        L.append(f'Record {w}   : {v:>9d} (0x{v:06X}), checksum byte 0x{c:02X}   '
+                 + ('<- live calibration factor, rewritten by the CAL routine' if w == 1 else '<- saved / factory value'))
+    ratio = f['record1'] / f['record2'] if f['record2'] else 0
+    L.append(f'             record 1 / record 2 = {ratio:.4f}')
     L.append('')
-    L.append('Template (bytes 20-31):')
-    L.append(f'  byte 20 = 0x{b20:02X}: threshold index {b20 & 3} (0x{THRESHOLDS[b20 & 3]:02X}), '
-             f'stability band index {(b20 >> 2) & 3} ({BANDS[(b20 >> 2) & 3]}), filter row {(b20 >> 4) & 3}, '
-             f'TEST MODE {"ON (display x2)" if b20 & 0x40 else "off"}, learn-X-on-calibration {"ON" if b20 & 0x80 else "off"}')
-    code = b21 & 7
-    L.append(f'  byte 21 = 0x{b21:02X}: resolution code {code}, DeltaDisplay '
-             + ('DISABLED (code 5)' if code == DELTADISPLAY_OFF_CODE else 'enabled (last digit blanks while the reading is unstable)'))
-    L.append(f'  bytes 22-24 = {d[22]:02X} {d[23]:02X} {d[24]:02X}: 24-bit constant X = {get24(d, 22)} (calibration window centre / factor)')
-    L.append(f'  bytes 25-27 = {d[25]:02X} {d[26]:02X} {d[27]:02X}: 24-bit threshold {get24(d, 25)}; byte 27 bit 7 = {(d[27] >> 7) & 1} '
-             f'-> calibration window X/{2 if d[27] & 0x80 else 32}; low 7 bits {d[27] & 0x7F} (compared with 13)')
-    L.append(f'  bytes 28-29 = {d[28]:02X} {d[29]:02X}   byte 30 = {d[30]:02X}   byte 31 = {d[31]:02X} (checksum / adjust bytes)')
+    L.append('Template:')
+    L.append(f'  file byte 21 = 0x{d[21]:02X}: threshold index {f["threshold_idx"]} (0x{THRESHOLDS[f["threshold_idx"]]:02X}), '
+             f'stability band index {f["band_idx"]} ({BANDS[f["band_idx"]]}), filter row {f["filter_row"]}, '
+             f'TEST MODE {"ON (display x2)" if f["test_mode"] else "off"}, learn-X {"ON" if f["learn"] else "off"}')
+    L.append(f'  file byte 20 = 0x{d[20]:02X}: code {f["code"]} - sets the decimal-point position with the saved unit; '
+             f'DeltaDisplay is also off when (unit base + code) & 7 == 5 (grams: code 5, which removes the decimals)')
+    x = f['x']
+    L.append(f'  X (file bytes 23, 22, 25)    = {x} internal units = {x / DIGIT_UNITS:g} display digits   <- calibration weight')
+    L.append(f'  limit (file bytes 24, 27, 26) = {f["limit"]} internal units = {f["limit"] / DIGIT_UNITS:g} display digits   <- range limit')
+    L.append(f'  calibration window: |reading - X| < X/{2 if f["window_half"] else 32} '
+             f'({"X/2" if f["window_half"] else "+-3.1 %"})')
+    L.append(f'  DeltaDisplay option (file bytes 29 and 31 = 0x{d[29]:02X}, 0x{d[31]:02X}): '
+             + ('active in this image, option bit set -> DeltaDisplay OFF' if f['dd_option_off'] else
+                ('option armed (byte 31 = 7F) but bit 3 of byte 29 is set -> DeltaDisplay stays ON' if f['dd_option_active'] else
+                 'not armed (byte 31 low 7 bits are not 7F)')))
     L.append('')
-    L.append('Closest known templates (bytes 2-3 and 20-29):')
+    L.append('Closest known templates (file bytes 2-3, 20-29, 31):')
     for n, name, diff, t in closest(d):
-        L.append(f'  {name:28s} {n} byte(s) differ' + (f' (bytes {", ".join(map(str, diff))})' if diff else '  <- identical'))
+        L.append(f'  {name:28s} {n} byte(s) differ' + (f' (file bytes {", ".join(map(str, diff))})' if diff else '  <- identical'))
     return '\n'.join(L)
 
 
 # ----------------------------------------------------------------------------- commands
 def cmd_info(a):
     d, sw = load(a.file)
-    print(a.file + ('   (word-swapped file, turned around for display)' if sw else ''))
+    print(a.file + ('   (file was in firmware word order, turned around for display)' if sw else ''))
     print(describe(d))
 
 
@@ -178,12 +233,12 @@ def cmd_verify(a):
 
 def report_change(old, new):
     ch = [i for i in range(SIZE) if old[i] != new[i]]
-    print('changed bytes:', ', '.join(f'{i}: {old[i]:02X}->{new[i]:02X}' for i in ch) if ch else 'none')
+    print('changed file bytes:', ', '.join(f'{i}: {old[i]:02X}->{new[i]:02X}' for i in ch) if ch else 'none')
 
 
 def cmd_fix(a):
     d, sw = load(a.input)
-    new = repair(d, a.adjust)
+    new = repair(d)
     report_change(d, new)
     save(a.output, new, sw)
     print('wrote', a.output, '(valid)' if valid(new) else '(STILL INVALID)')
@@ -191,33 +246,50 @@ def cmd_fix(a):
 
 def cmd_set(a):
     d, sw = load(a.input)
-    n = bytearray(d)
+    n = bytes(d)
     for spec in a.byte or []:
         k, v = spec.split('=')
-        n[int(k, 0)] = int(v, 0)
+        b = bytearray(n)
+        b[int(k, 0)] = int(v, 0)
+        n = bytes(b)
+
+    def edit(fn):
+        nonlocal n
+        n = modify(n, fn)
+
     if a.test_mode:
-        n[20] = (n[20] | 0x40) if a.test_mode == 'on' else (n[20] & ~0x40 & 255)
+        edit(lambda r: r.__setitem__(20, (r[20] | 0x40) if a.test_mode == 'on' else (r[20] & ~0x40 & 255)))
     if a.deltadisplay == 'off':
-        n[21] = (n[21] & ~7 & 255) | DELTADISPLAY_OFF_CODE
+        def off(r):
+            r[30] = 0x7F if (r[30] & 0x7F) != 0x7F else r[30]      # arm the option byte (already 7F in every known dump)
+            r[28] &= ~0x08 & 255                                     # bit 3 clear = DeltaDisplay off
+        edit(off)
     elif a.deltadisplay == 'on':
-        if a.code is None or not 0 <= a.code <= 7 or a.code == DELTADISPLAY_OFF_CODE:
-            raise SystemExit('--deltadisplay on needs --code N (0-7, not 5). The code also selects the base resolution '
-                             'constant, so use the value of a balance with the display you want (PE16/PE360: 1, '
-                             'PE1600: 0, PE6000: 4). See EEPROM_MAP.md.')
-        n[21] = (n[21] & ~7 & 255) | a.code
+        edit(lambda r: r.__setitem__(28, r[28] | 0x08))
+    if a.code is not None:
+        if not 0 <= a.code <= 7:
+            raise SystemExit('--code must be 0-7')
+        edit(lambda r: r.__setitem__(21, (r[21] & ~7 & 255) | a.code))
     if a.rec1 is not None:
-        set_record(n, 1, int(a.rec1, 0))
+        n = set_record(n, 1, int(a.rec1, 0))
     if a.rec2 is not None:
-        set_record(n, 2, int(a.rec2, 0))
-    new = repair(n, a.adjust, records=True)
+        n = set_record(n, 2, int(a.rec2, 0))
+    if a.x is not None:
+        edit(lambda r: put24(r, 22, int(a.x, 0)))
+    if a.x_digits is not None:
+        edit(lambda r: put24(r, 22, int(a.x_digits) * DIGIT_UNITS))
+    if a.limit is not None:
+        edit(lambda r: put24(r, 25, int(a.limit, 0)))
+    new = n if a.no_repair else repair(n)
     report_change(d, new)
-    if not (a.byte or a.test_mode or a.deltadisplay or a.rec1 or a.rec2):
+    if not (a.byte or a.test_mode or a.deltadisplay or a.code is not None or a.rec1 or a.rec2 or a.x or a.x_digits
+            or a.limit):
         print('nothing to change')
     if a.dry_run:
         print('dry run - nothing written')
         return
     save(a.output, new, sw)
-    print('wrote', a.output, '(valid)' if valid(new) else '(STILL INVALID)')
+    print('wrote', a.output, '(valid)' if valid(new) else '(INVALID - the balance will show ERROR)')
     print('NOTE: after programming a modified image, calibrate the balance with its calibration weight.')
 
 
@@ -229,15 +301,15 @@ def cmd_build(a):
     d = bytearray(SIZE)
     d[2:4] = b23
     d[20:32] = b2031
+    d = bytes(d)
     if a.donor:
         donor, _ = load(a.donor)
-        d[4:12] = donor[4:12]
+        d = d[:4] + donor[4:12] + d[12:]
         recs = f'calibration records copied from {a.donor}'
     else:
-        set_record(d, 1, 0)
-        set_record(d, 2, 0)
+        d = set_record(set_record(d, 1, 0), 2, 0)
         recs = 'calibration records ZERO (untested on hardware; use --donor with a dump of the same scale if you can)'
-    d = bytearray(repair(d, 30))
+    d = repair(d)
     if not valid(d):
         raise SystemExit('internal error: built image is invalid')
     save(a.out, d)
@@ -249,12 +321,17 @@ def cmd_diff(a):
     x, _ = load(a.a)
     y, _ = load(a.b)
     ch = [i for i in range(SIZE) if x[i] != y[i]]
-    print('identical' if not ch else '\n'.join(f'byte {i:2d}: {x[i]:02X} -> {y[i]:02X}' for i in ch))
+    print('identical' if not ch else '\n'.join(f'file byte {i:2d}: {x[i]:02X} -> {y[i]:02X}' for i in ch))
 
 
 def cmd_templates(a):
     for t in load_templates():
-        print(f'{t["name"]:24s} bytes 2-3 {t["bytes_2_3"]}  bytes 20-31 {t["bytes_20_31"]}  ({t["source"]})')
+        b23, b2031 = template_bytes(t)
+        d = bytearray(SIZE)
+        d[2:4], d[20:32] = b23, b2031
+        f = fields(bytes(d))
+        print(f'{t["name"]:12s} X={f["x"] / DIGIT_UNITS:>8g} digits  limit={f["limit"] / DIGIT_UNITS:>9g} digits  '
+              f'file bytes 2-3 {t["bytes_2_3"]}  20-31 {t["bytes_20_31"]}  ({t["source"]})')
         if t.get('notes'):
             print('    ' + t['notes'])
 
@@ -266,7 +343,7 @@ def cmd_from_words(a):
     d = bytes.fromhex(''.join(words))
     with open(a.out, 'wb') as f:
         f.write(d)
-    print('wrote', a.out, '- valid' if valid(d) else '- checksums do not verify (wrong word order?)')
+    print('wrote', a.out, '- valid' if valid(d) else '- checksums do not verify')
 
 
 def cmd_to_words(a):
@@ -277,21 +354,23 @@ def cmd_to_words(a):
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('--swapped', choices=('auto', 'yes', 'no'), default='auto',
-                   help='byte order of input files: some programmers swap the two bytes of every word '
-                        '(auto = guess from the 00 80 header)')
+                   help='input files saved in firmware word order (bytes 2-3 read 80 00); auto = guess from that header')
     sp = p.add_subparsers(dest='cmd', required=True)
     s = sp.add_parser('info'); s.add_argument('file'); s.set_defaults(f=cmd_info)
     s = sp.add_parser('verify'); s.add_argument('file'); s.set_defaults(f=cmd_verify)
-    s = sp.add_parser('fix'); s.add_argument('input'); s.add_argument('output')
-    s.add_argument('--adjust', type=int, choices=(30, 31), default=30); s.set_defaults(f=cmd_fix)
+    s = sp.add_parser('fix'); s.add_argument('input'); s.add_argument('output'); s.set_defaults(f=cmd_fix)
     s = sp.add_parser('set'); s.add_argument('input'); s.add_argument('output')
-    s.add_argument('--byte', action='append', metavar='N=VALUE', help='set a raw byte (repeatable)')
-    s.add_argument('--test-mode', choices=('on', 'off'), help='byte 20 bit 6: display x2 service mode')
-    s.add_argument('--deltadisplay', choices=('on', 'off'), help='byte 21 bits 0-2 == 5 disables it')
-    s.add_argument('--code', type=int, help='resolution code (0-7) for --deltadisplay on')
+    s.add_argument('--byte', action='append', metavar='N=VALUE', help='set a raw FILE byte (repeatable)')
+    s.add_argument('--test-mode', choices=('on', 'off'), help='file byte 21 bit 6: display x2 service mode')
+    s.add_argument('--deltadisplay', choices=('on', 'off'),
+                   help='file byte 29 bit 3 (needs byte 31 = 7F): clear = DeltaDisplay off, decimal point unchanged')
+    s.add_argument('--code', type=int, help='file byte 20 bits 0-2: moves the decimal point (see EEPROM_MAP.md)')
     s.add_argument('--rec1', help='24-bit value for calibration record 1')
     s.add_argument('--rec2', help='24-bit value for calibration record 2')
-    s.add_argument('--adjust', type=int, choices=(30, 31), default=30)
+    s.add_argument('--x', help='calibration weight X in internal units')
+    s.add_argument('--x-digits', type=int, help='calibration weight in display digits (X = 8 x digits)')
+    s.add_argument('--limit', help='range limit in internal units')
+    s.add_argument('--no-repair', action='store_true', help='do not recompute the checksum bytes afterwards')
     s.add_argument('--dry-run', action='store_true'); s.set_defaults(f=cmd_set)
     s = sp.add_parser('build'); s.add_argument('--template', required=True); s.add_argument('--out', required=True)
     s.add_argument('--donor', help='dump whose calibration records (bytes 4-11) to copy'); s.set_defaults(f=cmd_build)
