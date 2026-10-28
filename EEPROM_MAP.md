@@ -94,12 +94,18 @@ which is what the firmware numbering predicts.
 The firmware keeps `~byte` in RAM 0xD5 and tests three bits of it:
 
 * **bit 3 - DeltaDisplay** (0x7E5): clear -> last-digit blanking off (confirmed on hardware).
-* **bit 4 - stability detector (SD)** (0x5A7, 0x75A): while the reading is moving (the stability flag RAM 0xD6 bit 7 set) the display formatter sets segment bit 3 in the leftmost display position - the **stability-detector pilot** of the manuals ("the pilot of the stability detector is on" while the reading is unstable). The PE manual adds that the stability detector blocks the data output until the reading is stable; I have not checked that in the firmware.
+* **bit 4 - stability detector (SD)** (0x5A7, 0x75A): while the reading is moving (the stability flag RAM 0xD6 bit 7 set) the display formatter sets segment bit 3 in the leftmost display position - the **stability-detector pilot** of the manuals ("the pilot of the stability detector is on" while the reading is unstable). The PE manual adds that the stability detector blocks the data output until the reading is stable. **The option bit does not do that in this firmware** - it is read in only two places (the pilot at 0x5A7, and the pilot during a TARE that is waiting for a stable reading, 0x75A), see "Stability and the data output" below.
   Emulator, PE6000 image, step load: the raw display byte at the leftmost position is `89` with the bit set and `81` with it cleared, then `81` once stable. Clearing the bit keeps the pilot dark.
 * **bit 5 - auto zero** (0x6AB-0x6CF): when the reading is inside a small band around zero (and RAM 0x79 bit 5 and byte 26 bit 7 allow it) the zero reference RAM 0x51 is nudged by one internal unit (1/8 digit) per pass.
   With the bit cleared that branch is never executed (203 of 260 passes in the shipped image, 0 with the bit cleared). Emulator with 1 count of noise: the zero reference wanders by 5 units and
   is pulled back to zero with the bit set, and stays where it drifted with the bit cleared; the displayed value is the same at this resolution. P1.2 (the certification plug) selects the band constant (RAM 0x40 vs 0x43).
   The service manual (2.2) describes the auto zero as "limited to a small band width", and lists "no auto zero" among the Test-mode features.
+
+**Stability and the data output [rom][emu].** The firmware always derives an "unstable" flag (RAM 0x20 bit 1: set while the stability counter RAM 0x8D is below 0x40, 0x437-0x449), independent of the option byte.
+A data-output request from the interface (RAM 0x7D bit 4) is served by SUB_D5F (0xD5F) within one display period whether the reading is stable or not, and with bit 4 of the option byte set or clear
+(emulator, requests at rest, right after a load step, and settled, byte 29 = F8, E8 and F0: always served in at most 200 ms nominal). The interrupt routine's output phase (0x0CD-0x0F7) can send RAM 0x20, the status byte including the
+unstable flag, to the interface (R1 = 0x20 at 0x0DA), so stability is *reported* to the interface. The "blocks the data output until stable" of the manual is therefore either done by the interface card from that status bit, or
+by the hardware stability-detector switch of the PE200 family; I could not find it in the main firmware. The emulator has no interface card, so the actual transmission was not exercised.
 
 `pe_eeprom.py set in out --stability-detector off --auto-zero off`; shipped value `F8` = all three on. The PE200 family has hardware slide switches for DeltaDisplay + the stability detector and for integration time instead (docs/MODELS.md).
 
