@@ -1,0 +1,14 @@
+# Manufacturer material - never publish (copyright Mettler / National Semiconductor)
+*.pdf
+*.7z
+research/rom/
+*.asm
+*.hex
+hvepromcmd
+ME-47455*.bin
+
+# local output
+live_backups/
+__pycache__/
+*.pyc
+.DS_Store
