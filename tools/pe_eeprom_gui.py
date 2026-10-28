@@ -199,9 +199,16 @@ class App:
         ttk.Spinbox(disp, from_=0, to=7, width=4, textvariable=self.res_var, command=self.res_changed).grid(row=3, column=2, sticky='w')
         note(disp, 4, 'Where the decimal point sits for the selected unit, i.e. the readability. For grams: 4 = 1 decimal (0.1 g), 5 = no '
                       'decimal (also silences DeltaDisplay), 6 and 7 = Error. Changing it re-scales what the display shows, not the weighing.')
+        ttk.Label(disp, text='DeltaRange fine range (digits)').grid(row=5, column=0, columnspan=2, sticky='w')
+        self.fine_var = tk.StringVar()
+        ttk.Entry(disp, textvariable=self.fine_var, width=9).grid(row=5, column=2, sticky='w')
+        ttk.Button(disp, text='Set', width=4, command=self.set_fine).grid(row=5, column=3, sticky='w')
+        ttk.Button(disp, text='Off', width=4, command=lambda: self.ed_apply(self.ed.fine_range_off)).grid(row=5, column=4, sticky='w')
+        note(disp, 6, 'DeltaRange (PE360/PE3600): below this reading the full resolution is shown, above it the last digit is blanked (coarse range). Stored in file bytes 29, 28 and 31, '
+                      'so it excludes the DeltaDisplay option bit. Off = 7F in byte 31, as on the PE3000/PE6000/PE16.')
         ttk.Checkbutton(disp, text='Test (service) mode: display x2', variable=self.test_var,
-                        command=lambda: self.ed_apply(self.ed.set_test_mode, self.test_var.get())).grid(row=5, column=0, columnspan=4, sticky='w')
-        note(disp, 6, 'From the service manual: doubles the indicated value to make adjustments easier. Leave OFF for normal use.')
+                        command=lambda: self.ed_apply(self.ed.set_test_mode, self.test_var.get())).grid(row=7, column=0, columnspan=4, sticky='w')
+        note(disp, 8, 'From the service manual: doubles the indicated value to make adjustments easier. Leave OFF for normal use.')
 
         # -- Calibration
         self.x_var, self.lim_var = tk.StringVar(), tk.StringVar()
@@ -300,6 +307,13 @@ class App:
     def set_x(self):
         try:
             self.ed.set_x(round(float(self.x_var.get()) * 8))
+        except ValueError as ex:
+            messagebox.showerror('Invalid value', str(ex))
+        self.refresh()
+
+    def set_fine(self):
+        try:
+            self.ed.set_fine_range(int(float(self.fine_var.get())))
         except ValueError as ex:
             messagebox.showerror('Invalid value', str(ex))
         self.refresh()
@@ -459,6 +473,7 @@ class App:
         self.dd_label.config(text='DeltaDisplay (last-digit blanking): ' +
                              ('OFF via the option bit' if f['dd_option_off'] else
                               'ON' + (' (code 5 would also disable it, but moves the decimal point)' if f['code'] == 5 else '')))
+        self.fine_var.set(f"{f['fine_range'] / 8:g}" if f['fine_range_active'] else 'off')
         self.x_var.set(f"{f['x'] / 8:g}")
         self.lim_var.set(f"{f['limit'] / 8:g}")
         self.win_var.set(f['window_half'])

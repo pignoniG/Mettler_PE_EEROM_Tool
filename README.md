@@ -64,7 +64,7 @@ python3 tools/pe_eeprom_gui.py                 # or give it a dump:  python3 too
   a record edit fixes byte 6 or 10, a template edit fixes byte 30 - while editing a checksum byte yourself is left alone, so you can still
   make an invalid image on purpose. The header badge says whether the balance would accept the image.
 * **Fields**: the two calibration records, Test mode, grouped in three tabs (Display, Calibration, Response), each control with a plain-language explanation: DeltaDisplay on/off, decimal-point code,
-  Test mode, calibration weight, overload limit, calibration window, threshold / stability band / filter row. *Closest known templates* ranks the library against the open image and can apply one (the scale's own calibration
+  Test mode, calibration weight, overload limit, DeltaRange limit, calibration window, threshold / stability band / filter row. *Closest known templates* ranks the library against the open image and can apply one (the scale's own calibration
   records are kept).
 * **Undo** goes back through every edit; *Revert* returns to the file as opened; *Save as* writes in the byte order the file came in. The **change log**
   lists every edit with before and after values. *Copy as words* / *Paste words...* use the 16-word listing of forum posts. *File > New image from template*
@@ -106,6 +106,7 @@ the file back in the order it read it. Override with `--swapped yes|no` if a fil
 | [`tools/pe_eeprom_gui.py`](tools/pe_eeprom_gui.py), [`tools/pe_editor.py`](tools/pe_editor.py) | the GUI and the editing model behind it (the model has no GUI code and is unit-tested) |
 | [`EEPROM_MAP.md`](EEPROM_MAP.md) | the format, byte by byte, with evidence tags |
 | [`docs/FIRMWARE.md`](docs/FIRMWARE.md) | what is known about the ME-47455 firmware (no code is reproduced) |
+| [`docs/MODELS.md`](docs/MODELS.md) | model families, board numbers, calibration weights, which features are hardware switches (PE200) or EEPROM fields (DeltaRange) |
 | [`docs/CPU_PINS.md`](docs/CPU_PINS.md) | what the firmware drives and reads on each CPU pin (for anyone replacing a dead CPU; inferred from the code, not scoped) |
 | [`docs/DUMPING_THE_CPU.md`](docs/DUMPING_THE_CPU.md) | how the CPU mask ROM was read with an MCS-48 programmer |
 | [`examples/`](examples/) | the nine example EEPROM dumps and where they came from |

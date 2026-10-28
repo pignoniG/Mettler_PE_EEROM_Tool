@@ -151,11 +151,27 @@ def fields(d):
         'x': get24(r, 22), 'limit': limit & 0x7FFFFF, 'window_half': bool(r[27] & 0x80),
         'dd_option_off': (r[30] & 0x7F) == 0x7F and not (r[28] & 0x08),
         'dd_option_active': (r[30] & 0x7F) == 0x7F,
+        'fine_range_active': (r[30] & 0x7F) != 0x7F,
+        'fine_range': r[28] | (r[29] << 8) | (r[30] << 16),
         'r28': r[28], 'r29': r[29], 'r30': r[30],
     }
 
 
 # ----------------------------------------------------------------------------- templates library
+def set_fine_range(r, digits):
+    """DeltaRange limit: firmware bytes 28, 29, 30 hold a 24-bit value in 1/8-digit units, LSB first (r is in firmware order)."""
+    units = digits * DIGIT_UNITS
+    if not 0 < units < 0x7F0000:
+        raise ValueError('fine range must be between 1 and %d digits' % (0x7F0000 // DIGIT_UNITS - 1))
+    r[28], r[29], r[30] = units & 255, (units >> 8) & 255, units >> 16
+
+
+def set_fine_range_off(r):
+    if (r[30] & 0x7F) != 0x7F:                  # a fine-range value is stored: put the family default back (option byte F8 = DeltaDisplay on)
+        r[28] = 0xF8
+    r[29], r[30] = 0xFF, 0x7F
+
+
 def load_templates():
     with open(TEMPLATES_JSON) as f:
         return json.load(f)['templates']
@@ -210,6 +226,11 @@ def describe(d):
              + ('active in this image, option bit set -> DeltaDisplay OFF' if f['dd_option_off'] else
                 ('option armed (byte 31 = 7F) but bit 3 of byte 29 is set -> DeltaDisplay stays ON' if f['dd_option_active'] else
                  'not armed (byte 31 low 7 bits are not 7F)')))
+    if f['fine_range_active']:
+        L.append(f'  DeltaRange: fine range up to {f["fine_range"] / DIGIT_UNITS:g} display digits (file bytes 29, 28, 31 as a 24-bit value, LSB first); '
+                 'above it the last digit is blanked')
+    else:
+        L.append('  DeltaRange: not used (file byte 31 low 7 bits = 7F; byte 29 is then the option byte above)')
     L.append('')
     L.append('Closest known templates (file bytes 2-3, 20-29, 31):')
     for n, name, diff, t in closest(d):
@@ -280,10 +301,14 @@ def cmd_set(a):
         edit(lambda r: put24(r, 22, int(a.x_digits) * DIGIT_UNITS))
     if a.limit is not None:
         edit(lambda r: put24(r, 25, int(a.limit, 0)))
+    if a.fine_range == 'off':
+        edit(set_fine_range_off)
+    elif a.fine_range_digits is not None:
+        edit(lambda r: set_fine_range(r, int(a.fine_range_digits)))
     new = n if a.no_repair else repair(n)
     report_change(d, new)
     if not (a.byte or a.test_mode or a.deltadisplay or a.code is not None or a.rec1 or a.rec2 or a.x or a.x_digits
-            or a.limit):
+            or a.limit or a.fine_range or a.fine_range_digits is not None):
         print('nothing to change')
     if a.dry_run:
         print('dry run - nothing written')
@@ -370,6 +395,8 @@ def main(argv=None):
     s.add_argument('--x', help='calibration weight X in internal units')
     s.add_argument('--x-digits', type=int, help='calibration weight in display digits (X = 8 x digits)')
     s.add_argument('--limit', help='range limit in internal units')
+    s.add_argument('--fine-range-digits', type=int, help='DeltaRange: fine range extent in display digits; above it the last digit is blanked (file bytes 29, 28, 31)')
+    s.add_argument('--fine-range', choices=('off',), help='no DeltaRange (file byte 31 = 7F, byte 28 = FF): the PE3000/PE6000/PE16 default')
     s.add_argument('--no-repair', action='store_true', help='do not recompute the checksum bytes afterwards')
     s.add_argument('--dry-run', action='store_true'); s.set_defaults(f=cmd_set)
     s = sp.add_parser('build'); s.add_argument('--template', required=True); s.add_argument('--out', required=True)

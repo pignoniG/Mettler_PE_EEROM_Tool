@@ -41,14 +41,14 @@
    "bytes_2_3": "0080",
    "bytes_20_31": "02113500d00c2bf453000e07",
    "source": "2006 forum post (David Smith)",
-   "notes": "Different family: file bytes 28-31 are not FF F8 .. 7F. Calibration weight 100000 digits (100.000 g at 0.001 g readability); range limit 360.090 g."
+   "notes": "DeltaRange model: file bytes 28-31 hold the 60000-digit (60 g) fine-range limit instead of FF F8 .. 7F. Calibration weight 100000 digits (100.000 g at 0.001 g readability); range limit 360.090 g."
   },
   {
    "name": "PE3600",
    "bytes_2_3": "0080",
    "bytes_20_31": "03053500d00c2bf453001907",
    "source": "2006 forum post (David Smith)",
-   "notes": "Different family, as PE360. Calibration weight 100000 digits (1000.00 g at 0.01 g readability); range limit 3600.90 g."
+   "notes": "DeltaRange model, as PE360 (fine range 600 g). Calibration weight 100000 digits (1000.00 g at 0.01 g readability); range limit 3600.90 g."
   }
  ]
 }

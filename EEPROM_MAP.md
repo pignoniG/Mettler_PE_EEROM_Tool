@@ -51,10 +51,16 @@ it was accepted. The tool changes **only** the checksum byte of the block you to
 | 21 [20] | bits 0-1 **threshold** index {0x86,0x89,0xA3,0xC2} in the integration interrupt (a response/filter parameter); bits 2-3 **stability band** {8,4,2,12}; bits 4-5 **filter row** (table at 0x396); **bit 6 TEST MODE: display x2** (service manual "doubles values to facilitate adjustments"); bit 7 calibration copies the measured value into X **[rom][emu]** |
 | 23, 22, 25 [22,23,24] | **X = calibration weight** in internal units, 24-bit LSB first, **1 unit = 1/8 of a display digit**. PE3000-A 80000 = 10000 digits = 1 kg at 0.1 g; PE3000-B 240000 = 30000 digits = 3 kg; PE6000 160000 = 2 kg; PE16 4 kg. Calibration is accepted if the measured value is within X/32 (+-3.1 %) of X **[rom][hw]** |
 | 24, 27, 26 [25,26,27] | **range limit** (overload) in the same units ~ capacity + 3 %. **Bit 7 of file byte 26 = calibration window X/2 instead of X/32** **[rom]** |
-| 28 [29] | unknown, FF in all dumps |
-| 29 [28] | `F8` in the PE11..PE6000 family. **Bit 3 = DeltaDisplay option bit** (4) |
+| 28 [29] | middle byte of the DeltaRange limit (below); `FF` in the PE11..PE6000 family, `53` in the PE360/PE3600 |
+| 29 [28] | low byte of the DeltaRange limit; **or, when no DeltaRange is configured, the option byte** (`F8` in the PE11..PE6000 family; bit 3 = DeltaDisplay option bit, see 4) |
 | 30 [31] | template checksum |
-| 31 [30] | option gate: `7F` in all PE11..PE6000 dumps. If its low 7 bits are 7F, byte 29 is read as an option byte (RAM 0xD5 = ~byte 29) **[rom]** |
+| 31 [30] | top byte of the DeltaRange limit: `07` in the PE360/PE3600; **`7F` in all other dumps = no DeltaRange** (low 7 bits 7F makes byte 29 the option byte) **[rom][emu]** |
+
+**DeltaRange (file bytes 29, 28, 31 = firmware bytes 28, 29, 30).** The firmware (SUB_8D1 at 0x8D1) compares the net reading with a 24-bit value stored LSB first in these bytes, in the usual 1/8-digit units.
+The PE360 and PE3600 dumps hold `0x075300` = 480000 = **60000 digits** - exactly the 60 g (at 0.001 g) and 600 g (at 0.01 g) fine ranges of the PE360/PE3600 DeltaRange models
+(manual `pe360_deltarange.pdf`). Above the limit the last digit is blanked and the coarse range is shown. All other dumps have a top byte of 7F, i.e. an effectively infinite fine range.
+Emulator check on a PE6000 image with a 500-digit limit: a 356-digit reading shows all digits, a 1067-digit reading shows `107.` with the last digit blanked **[emu]**. DeltaRange and the
+DeltaDisplay option bit share these bytes, so a DeltaRange balance cannot also use the option bit. `pe_eeprom.py set --fine-range-digits N` / `--fine-range off`.
 
 (LSB first, listed in that order. Use `pe_eeprom.py info` instead of decoding by hand.)
 
@@ -106,4 +112,4 @@ CAL regenerates record 1. Scratch bytes 0-1 are rewritten on every standby.
 
 * the "faster weighing-in" half of Fastmode (service bulletin ME-701763): candidates are threshold / band / filter row in file byte 21
   (see `research/RESULTS.md` for sweeps), none confirmed;
-* file bytes 12-19, 28 and the exact use of the filter-row table.
+* file bytes 12-19, the meaning of the other option bits (file byte 29 bits 4 and 5 feed display code at 0x5A7/0x6AF/0x75A; not characterised), the exact use of the filter-row table.

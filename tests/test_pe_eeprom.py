@@ -104,6 +104,30 @@ class Editing(unittest.TestCase):
             self.assertEqual([(i, o[i], n[i]) for i in range(32) if o[i] != n[i]], [(29, 0xF8, 0xF0), (30, 0x06, 0x0E)])
 
 
+class DeltaRange(unittest.TestCase):
+    def test_forum_pe360_and_pe3600_carry_a_60000_digit_fine_range(self):
+        for fn in ('pe360_forum.bin', 'pe3600_forum.bin'):
+            f = pe.fields(ex(fn))
+            self.assertTrue(f['fine_range_active'])
+            self.assertEqual(f['fine_range'], 60000 * pe.DIGIT_UNITS)
+
+    def test_other_models_have_no_fine_range(self):
+        for fn in ('pe6000_own.bin', 'pe16_forum.bin', 'pe3000_A_faulty-chip.bin', 'pe1600_own.bin'):
+            self.assertFalse(pe.fields(ex(fn))['fine_range_active'])
+
+    def test_set_and_clear_fine_range(self):
+        with tempfile.TemporaryDirectory() as td:
+            out = os.path.join(td, 'o.bin')
+            pe.main(['set', os.path.join(EX, 'pe6000_own.bin'), out, '--fine-range-digits', '500'])
+            n = rd(out)
+            self.assertTrue(pe.valid(n))
+            self.assertEqual(pe.fields(n)['fine_range'], 4000)
+            pe.main(['set', out, out, '--fine-range', 'off'])
+            self.assertFalse(pe.fields(rd(out))['fine_range_active'])
+            self.assertTrue(pe.valid(rd(out)))
+            self.assertEqual(rd(out), ex('pe6000_own.bin'))        # back to the original image
+
+
 class Build(unittest.TestCase):
     def test_build_from_template_with_donor_reproduces_the_dump(self):
         cases = {'PE3000-A': 'pe3000_A_faulty-chip.bin', 'PE3000-B': 'pe3000_B_french_original.bin',

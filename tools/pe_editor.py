@@ -178,6 +178,12 @@ class Editor:
     def deltadisplay_on(self):
         return self._fw(lambda r: r.__setitem__(28, r[28] | 0x08), 'DeltaDisplay on (file byte 29 bit 3 set)')
 
+    def set_fine_range(self, digits):
+        return self._fw(lambda r: pe.set_fine_range(r, digits), f'DeltaRange fine range = {digits} digits (file bytes 29, 28, 31)')
+
+    def fine_range_off(self):
+        return self._fw(pe.set_fine_range_off, 'DeltaRange off (file byte 31 = 7F, byte 28 = FF)')
+
     def deltadisplay_option_off(self):
         return self.fields()['dd_option_off']
 
