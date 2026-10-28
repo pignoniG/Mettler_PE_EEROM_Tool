@@ -38,19 +38,19 @@ it was accepted. The tool changes **only** the checksum byte of the block you to
 
 | file byte | content |
 |---|---|
-| 0 [1] | scratch: down-counter saved on standby (00, 01, D0 seen). Not configuration **[rom][hw]** |
-| 1 [0] | scratch: firmware flag register saved on standby **[rom]** |
-| 2 [3] | `80` in all dumps: low half of the unit word |
-| 3 [2] | **high nibble = the unit the user last selected** (index into a unit table; 8 = grams). A user setting **[rom]** |
+| 0 [1] | scratch: hold-off down-counter (RAM 0x21), saved on standby (00, 01, D0 seen). Not configuration. A value of 0x40 or more makes the display show a blank pattern for the first seconds after power-on while it counts down (about 50 s in total for FF in the emulator), then it recovers by itself **[rom][emu]** |
+| 1 [0] | scratch: flag register saved on standby; cleared at power-on (0xE29), so it has no effect at all **[rom][emu]** |
+| 2 [3] | `00` in all dumps; RAM 0x23 is never read: **unused** **[rom][emu]** |
+| 3 [2] | `80` in all dumps. **High nibble = the unit the user last selected** (8 = grams; each unit has its own decimal-point base, a wrong nibble gives other units or `Error`). Low nibble: bits 0-2 do nothing, bit 3 lights an extra symbol segment at the left; a user setting **[rom][emu]** |
 | 4, 5, 7 [5,4,7] | **calibration record 1**, 24-bit, LSB first = file bytes 5, 4, 7: the live calibration factor (rewritten by CAL) **[rom][hw]** |
 | 6 [7] | checksum of record 1 |
 | 8, 9, 11 | calibration record 2: saved / factory copy (round numbers), within ~0.5 % of record 1; restored by `SUB_F03` **[rom]** |
 | 10 | checksum of record 2 |
 | 12-19 | **not a parameter**: zero in all dumps and never used by the weighing code. At power-on they land in RAM 0x2C-0x33, which is the data-interface buffer and is overwritten. They are written only by the interface commands `R` and `U` (8 bytes from the interface buffer, 4 words at EAROM address 6) **[rom][emu]** |
-| 20 [21] | bits 0-2: **decimal-point code** - position class of the decimal point, combined with the unit. For grams: 1 = 3 decimals ... 4 = one decimal, **5 = integer** (and disables DeltaDisplay, see 4), 6/7 = `Error` **[rom][emu]**. Only moves the decimal point (the digits shown are identical for every code), so it cannot add resolution - see `research/RESULTS.md` |
+| 20 [21] | bits 0-2: **decimal-point code** - position class of the decimal point, combined with the unit. For grams: 1 = 3 decimals ... 4 = one decimal, **5 = integer** (and disables DeltaDisplay, see 4), 6/7 = `Error` **[rom][emu]**. Only moves the decimal point (the digits shown are identical for every code), so it cannot add resolution - see `research/RESULTS.md`. **Bits 3-7 are unused** (no effect in the emulator; RAM 0x35 is only read through `& 7`) |
 | 21 [20] | bits 0-1 **threshold** index {0x86,0x89,0xA3,0xC2} in the integration interrupt (a response/filter parameter); bits 2-3 **stability band** {8,4,2,12}; bits 4-5 **filter row** (table at 0x396); **bit 6 TEST MODE: display x2** (service manual "doubles values to facilitate adjustments"); bit 7 calibration copies the measured value into X **[rom][emu]** |
 | 23, 22, 25 [22,23,24] | **X = calibration weight** in internal units, 24-bit LSB first, **1 unit = 1/8 of a display digit**. PE3000-A 80000 = 10000 digits = 1 kg at 0.1 g; PE3000-B 240000 = 30000 digits = 3 kg; PE6000 160000 = 2 kg; PE16 4 kg. Calibration is accepted if the measured value is within X/32 (+-3.1 %) of X **[rom][hw]** |
-| 24, 27, 26 [25,26,27] | **range limit** (overload) in the same units ~ capacity + 3 %. **Bit 7 of file byte 26 = calibration window X/2 instead of X/32** **[rom]** |
+| 24, 27, 26 [25,26,27] | **range limit** (overload) in the same units ~ capacity + 3 %. **Bit 7 of file byte 26 = calibration window X/2 instead of X/32**. **Low 7 bits of file byte 26 (the top byte of the limit) >= 13, i.e. a limit of 13 x 65536 units = 106496 digits or more, select a different display-processing path** (SUB_B58 at 0xB6A: other timing parameters and an averaging buffer). PE16/PE1600 (0x13) and PE360/PE3600 (0x2B) are in that class, PE3000 (03) and PE6000 (07) are not; setting bit 3-6 of the PE6000 value (07 -> 0F..47) changed the executed code in 88 places and 86 of 200 display frames in the emulator [rom][emu] **[rom]** |
 | 28 [29] | middle byte of the DeltaRange limit (bit k = 32 x 2^k digits); `FF` in the PE11..PE6000 family, `53` in the PE360/PE3600. **No effect at all when byte 31 = 7F** [rom][emu]: its only reader is the DeltaRange comparison at 0x8D5 |
 | 29 [28] | low byte of the DeltaRange limit; **or, when no DeltaRange is configured, the option byte** (`F8` in the PE11..PE6000 family). A **set bit means the feature is on**: **bit 3 DeltaDisplay** (4), **bit 4 stability detector (SD)**, **bit 5 auto zero**; **bits 0-2, 6 and 7 do nothing** (see below) |
 | 30 [31] | template checksum |
@@ -127,6 +127,25 @@ The scenario does not include keys, units, TARE, calibration, test mode or the d
 | PE3600 | 03 | 05 | 35 00 | D0 0C | 2B F4 | 53 00 | 19 | 07 | 100000 | 360090 |
 
 (byte columns are the raw file bytes in order; `pe_eeprom.py templates` prints the decoded values.)
+
+### Byte-by-byte check (emulator, every bit flipped, PE6000 image)  [emu]
+
+| file byte | result |
+|---|---|
+| 0 | hold-off counter, bits 6-7 visibly delay the first display (see map); lower bits invisible |
+| 1 | no effect (cleared at power-on) |
+| 2 | no effect |
+| 3 | high nibble = unit (visible), bit 3 = extra symbol, bits 0-2 none |
+| 4-11 | calibration records (not swept; known from the calibration code) |
+| 12-19 | no effect |
+| 20 | bits 0-2 decimal point (visible), bits 3-7 none |
+| 21 | bits 0-1 threshold: no visible effect; 2-3 band, 4-5 filter row, 6 test mode: visible; 7 learn: only matters during calibration |
+| 22, 23, 25 | X (calibration weight): no effect on weighing, used by calibration |
+| 24, 27 | limit low bytes: no effect away from the limit |
+| 26 | bits 0-2 none, bits 3-6 select the large-range display path, bit 7 calibration window (and gates auto zero) |
+| 28 | no effect with byte 31 = 7F; middle byte of the DeltaRange limit otherwise |
+| 29 | bit 3 DeltaDisplay, bit 4 stability detector, bit 5 auto zero; bits 0-2, 6, 7 none |
+| 31 | 7F = no DeltaRange; other = top byte of the DeltaRange limit |
 
 ## 6. A fresh image
 

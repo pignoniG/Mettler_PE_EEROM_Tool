@@ -39,7 +39,7 @@ for _i in (4, 5, 7): BYTE_HELP[_i] = 'calibration record 1 (24-bit, least signif
 for _i in (8, 9, 11): BYTE_HELP[_i] = 'calibration record 2 (bytes 9, 8, 11): saved / factory copy of the calibration factor'
 for _i in range(12, 20): BYTE_HELP[_i] = 'unused: zero in all known dumps'
 for _i in (23, 22, 25): BYTE_HELP[_i] = 'X = calibration weight in internal units (1/8 display digit); LSB first: bytes 23, 22, 25'
-for _i in (24, 27, 26): BYTE_HELP[_i] = 'range limit (bytes 24, 27, 26); byte 26 bit 7 = calibration window X/2 (clear = X/32)'
+for _i in (24, 27, 26): BYTE_HELP[_i] = 'range limit (bytes 24, 27, 26); byte 26 bits 0-6 >= 13 (limit >= 106496 digits) select the large-range display path; bit 7 = calibration window X/2 (clear = X/32)'
 
 
 class App:
