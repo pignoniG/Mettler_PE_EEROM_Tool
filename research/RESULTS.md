@@ -16,6 +16,25 @@ Time figures are nominal; only comparisons between variants mean anything.
 | byte 21 changed (threshold/band bits) | still blanks, sensitivity differs | matches the real chip flashed with the wrong byte: blanking "less sensitive, still there" |
 | byte 31 = FF | blanks on every frame | bit 7 of the gate byte inverts the effect; do not use |
 
+## Decimal-point code (file byte 20 bits 0-2) does not change resolution
+
+PE6000 image, only byte 20 bits 0-2 changed (checksum repaired), normal power-on, same load step (+60 counts), run with no noise and with 0.3 counts of
+Gaussian noise per integration cycle. The settled display is the same digit string for every code; only the decimal point moves:
+
+| code | display |
+|---|---|
+| 0 | 0.01067 |
+| 1 | 0.1067 |
+| 2 | 1.067 |
+| 3 | 10.67 |
+| 4 | 106.7 |
+| 5 | 1067 |
+| 6, 7 | `Error` |
+
+The last digit is the same physical step in every case and the noisy runs show no extra flicker, so the code gives no extra resolution: it relabels the scale by powers of ten,
+so only the code the balance was built with shows the true weight. Tested only with the unit stored in this image (grams); other units use a different base.
+Emulator only, not tried on a real balance.
+
 ## Test mode, calibration weight
 
 * File byte 21 bit 6 doubles the displayed value (1067 -> 2134 for the same input): the service manual's service mode.
