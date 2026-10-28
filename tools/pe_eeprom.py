@@ -151,7 +151,7 @@ def fields(d):
         'x': get24(r, 22), 'limit': limit & 0x7FFFFF, 'window_half': bool(r[27] & 0x80),
         'dd_option_off': (r[30] & 0x7F) == 0x7F and not (r[28] & 0x08),
         'dd_option_active': (r[30] & 0x7F) == 0x7F,
-        'pilot_off': (r[30] & 0x7F) == 0x7F and not (r[28] & 0x10),
+        'sd_off': (r[30] & 0x7F) == 0x7F and not (r[28] & 0x10),
         'auto_zero_off': (r[30] & 0x7F) == 0x7F and not (r[28] & 0x20),
         'fine_range_active': (r[30] & 0x7F) != 0x7F,
         'fine_range': r[28] | (r[29] << 8) | (r[30] << 16),
@@ -161,7 +161,7 @@ def fields(d):
 
 # ----------------------------------------------------------------------------- templates library
 def set_option_bit(r, bit, on):
-    """File byte 29 (firmware byte 28) option bits: 3 DeltaDisplay, 4 unstable-reading pilot, 5 auto zero. Set = feature on.
+    """File byte 29 (firmware byte 28) option bits: 3 DeltaDisplay, 4 stability detector (SD), 5 auto zero. Set = feature on.
     Arms the option byte by making the top byte of the DeltaRange limit 7F (the family default)."""
     if (r[30] & 0x7F) != 0x7F:
         r[30] = 0x7F
@@ -238,7 +238,7 @@ def describe(d):
                  'not armed (byte 31 low 7 bits are not 7F)')))
     if not f['fine_range_active']:
         L.append(f'  option byte (file byte 29 = 0x{d[29]:02X}): DeltaDisplay {"OFF" if f["dd_option_off"] else "on"}, '
-                 f'unstable pilot {"OFF" if f["pilot_off"] else "on"}, auto zero {"OFF" if f["auto_zero_off"] else "on"}')
+                 f'stability detector (SD) {"OFF" if f["sd_off"] else "on"}, auto zero {"OFF" if f["auto_zero_off"] else "on"}')
     if f['fine_range_active']:
         L.append(f'  DeltaRange: fine range up to {f["fine_range"] / DIGIT_UNITS:g} display digits (file bytes 29, 28, 31 as a 24-bit value, LSB first); '
                  'above it the last digit is blanked')
@@ -314,7 +314,7 @@ def cmd_set(a):
         edit(lambda r: put24(r, 22, int(a.x_digits) * DIGIT_UNITS))
     if a.limit is not None:
         edit(lambda r: put24(r, 25, int(a.limit, 0)))
-    for opt, bit in ((a.pilot, 4), (a.auto_zero, 5)):
+    for opt, bit in ((a.sd, 4), (a.auto_zero, 5)):
         if opt:
             edit(lambda r, bit=bit, opt=opt: set_option_bit(r, bit, opt == 'on'))
     if a.fine_range == 'off':
@@ -324,7 +324,7 @@ def cmd_set(a):
     new = n if a.no_repair else repair(n)
     report_change(d, new)
     if not (a.byte or a.test_mode or a.deltadisplay or a.code is not None or a.rec1 or a.rec2 or a.x or a.x_digits
-            or a.limit or a.fine_range or a.fine_range_digits is not None or a.pilot or a.auto_zero):
+            or a.limit or a.fine_range or a.fine_range_digits is not None or a.sd or a.auto_zero):
         print('nothing to change')
     if a.dry_run:
         print('dry run - nothing written')
@@ -411,7 +411,7 @@ def main(argv=None):
     s.add_argument('--x', help='calibration weight X in internal units')
     s.add_argument('--x-digits', type=int, help='calibration weight in display digits (X = 8 x digits)')
     s.add_argument('--limit', help='range limit in internal units')
-    s.add_argument('--pilot', choices=('on', 'off'), help='file byte 29 bit 4: the leftmost display segment that lights while the reading is unstable (needs byte 31 = 7F)')
+    s.add_argument('--stability-detector', '--pilot', dest='sd', choices=('on', 'off'), help='file byte 29 bit 4: the stability detector (SD) pilot, a leftmost display segment that lights while the reading is unstable (needs byte 31 = 7F)')
     s.add_argument('--auto-zero', choices=('on', 'off'), help='file byte 29 bit 5: slow zero tracking near zero (needs byte 31 = 7F)')
     s.add_argument('--fine-range-digits', type=int, help='DeltaRange: fine range extent in display digits; above it the last digit is blanked (file bytes 29, 28, 31)')
     s.add_argument('--fine-range', choices=('off',), help='no DeltaRange (file byte 31 = 7F, byte 28 = FF): the PE3000/PE6000/PE16 default')

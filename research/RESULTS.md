@@ -65,7 +65,7 @@ Ramp inputs (fast: 1 count per 1500 cycles, slow: 1 count per 60000 cycles) on t
 
 ## Option byte bits 4 and 5 (file byte 29)
 
-* Bit 4 clear: the leftmost display segment (bit 3 of the first display byte, `89` vs `81`) never lights while the reading is moving - the stability-detector pilot.
+* Bit 4 clear: the leftmost display segment (bit 3 of the first display byte, `89` vs `81`) never lights while the reading is moving - the stability-detector (SD) pilot of the manuals.
 * Bit 5 clear: the zero-tracking branch at ROM 0x6B4-0x6CF is never executed (203 passes with the bit set, 0 with it clear). With noise, the zero reference RAM 0x51 is stepped back by one unit
   per pass when the bit is set and stays where it drifted when it is clear; at the displayed resolution the readings were the same. This is the auto zero.
 

@@ -199,10 +199,10 @@ class App:
         ttk.Spinbox(disp, from_=0, to=7, width=4, textvariable=self.res_var, command=self.res_changed).grid(row=3, column=2, sticky='w')
         note(disp, 4, 'Where the decimal point sits for the selected unit, i.e. the readability. For grams: 4 = 1 decimal (0.1 g), 5 = no '
                       'decimal (also silences DeltaDisplay), 6 and 7 = Error. Changing it re-scales what the display shows, not the weighing.')
-        self.pilot_var, self.az_var = tk.BooleanVar(), tk.BooleanVar()
-        ttk.Checkbutton(disp, text='Unstable-reading pilot (leftmost segment)', variable=self.pilot_var,
-                        command=lambda: self.ed_apply(self.ed.set_pilot, self.pilot_var.get())).grid(row=9, column=0, columnspan=4, sticky='w')
-        note(disp, 10, 'File byte 29 bit 4: the stability-detector pilot, a segment in the leftmost position that lights while the reading moves. Off = never lights.')
+        self.sd_var, self.az_var = tk.BooleanVar(), tk.BooleanVar()
+        ttk.Checkbutton(disp, text='Stability detector (SD) pilot', variable=self.sd_var,
+                        command=lambda: self.ed_apply(self.ed.set_stability_detector, self.sd_var.get())).grid(row=9, column=0, columnspan=4, sticky='w')
+        note(disp, 10, 'File byte 29 bit 4: the stability detector (SD) pilot of the manuals, a segment in the leftmost position that lights while the reading moves. Off = never lights.')
         ttk.Checkbutton(disp, text='Auto zero', variable=self.az_var,
                         command=lambda: self.ed_apply(self.ed.set_auto_zero, self.az_var.get())).grid(row=11, column=0, columnspan=4, sticky='w')
         note(disp, 12, 'File byte 29 bit 5: slowly tracks the zero reading in steps of 1/8 digit while the reading stays inside a small band around zero. Off = zero only changes with TARE. (The service manual lists 'no auto zero' for Test mode.)')
@@ -480,7 +480,7 @@ class App:
         self.dd_label.config(text='DeltaDisplay (last-digit blanking): ' +
                              ('OFF via the option bit' if f['dd_option_off'] else
                               'ON' + (' (code 5 would also disable it, but moves the decimal point)' if f['code'] == 5 else '')))
-        self.pilot_var.set(not f['pilot_off'])
+        self.sd_var.set(not f['sd_off'])
         self.az_var.set(not f['auto_zero_off'])
         self.fine_var.set(f"{f['fine_range'] / 8:g}" if f['fine_range_active'] else 'off')
         self.x_var.set(f"{f['x'] / 8:g}")

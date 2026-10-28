@@ -52,7 +52,7 @@ it was accepted. The tool changes **only** the checksum byte of the block you to
 | 23, 22, 25 [22,23,24] | **X = calibration weight** in internal units, 24-bit LSB first, **1 unit = 1/8 of a display digit**. PE3000-A 80000 = 10000 digits = 1 kg at 0.1 g; PE3000-B 240000 = 30000 digits = 3 kg; PE6000 160000 = 2 kg; PE16 4 kg. Calibration is accepted if the measured value is within X/32 (+-3.1 %) of X **[rom][hw]** |
 | 24, 27, 26 [25,26,27] | **range limit** (overload) in the same units ~ capacity + 3 %. **Bit 7 of file byte 26 = calibration window X/2 instead of X/32** **[rom]** |
 | 28 [29] | middle byte of the DeltaRange limit (below); `FF` in the PE11..PE6000 family, `53` in the PE360/PE3600 |
-| 29 [28] | low byte of the DeltaRange limit; **or, when no DeltaRange is configured, the option byte** (`F8` in the PE11..PE6000 family). A **set bit means the feature is on**: **bit 3 DeltaDisplay** (4), **bit 4 unstable-reading pilot**, **bit 5 auto zero**; bits 0-2, 6, 7 are not used by any code path found |
+| 29 [28] | low byte of the DeltaRange limit; **or, when no DeltaRange is configured, the option byte** (`F8` in the PE11..PE6000 family). A **set bit means the feature is on**: **bit 3 DeltaDisplay** (4), **bit 4 stability detector (SD)**, **bit 5 auto zero**; bits 0-2, 6, 7 are not used by any code path found |
 | 30 [31] | template checksum |
 | 31 [30] | top byte of the DeltaRange limit: `07` in the PE360/PE3600; **`7F` in all other dumps = no DeltaRange** (low 7 bits 7F makes byte 29 the option byte) **[rom][emu]** |
 
@@ -94,14 +94,14 @@ which is what the firmware numbering predicts.
 The firmware keeps `~byte` in RAM 0xD5 and tests three bits of it:
 
 * **bit 3 - DeltaDisplay** (0x7E5): clear -> last-digit blanking off (confirmed on hardware).
-* **bit 4 - unstable-reading pilot** (0x5A7, 0x75A): while the reading is moving (the stability flag RAM 0xD6 bit 7 set) the display formatter sets segment bit 3 in the leftmost display position - the stability-detector pilot.
+* **bit 4 - stability detector (SD)** (0x5A7, 0x75A): while the reading is moving (the stability flag RAM 0xD6 bit 7 set) the display formatter sets segment bit 3 in the leftmost display position - the **stability-detector pilot** of the manuals ("the pilot of the stability detector is on" while the reading is unstable). The PE manual adds that the stability detector blocks the data output until the reading is stable; I have not checked that in the firmware.
   Emulator, PE6000 image, step load: the raw display byte at the leftmost position is `89` with the bit set and `81` with it cleared, then `81` once stable. Clearing the bit keeps the pilot dark.
 * **bit 5 - auto zero** (0x6AB-0x6CF): when the reading is inside a small band around zero (and RAM 0x79 bit 5 and byte 26 bit 7 allow it) the zero reference RAM 0x51 is nudged by one internal unit (1/8 digit) per pass.
   With the bit cleared that branch is never executed (203 of 260 passes in the shipped image, 0 with the bit cleared). Emulator with 1 count of noise: the zero reference wanders by 5 units and
   is pulled back to zero with the bit set, and stays where it drifted with the bit cleared; the displayed value is the same at this resolution. P1.2 (the certification plug) selects the band constant (RAM 0x40 vs 0x43).
   The service manual (2.2) describes the auto zero as "limited to a small band width", and lists "no auto zero" among the Test-mode features.
 
-`pe_eeprom.py set in out --pilot off --auto-zero off`; shipped value `F8` = all three on. The PE200 family has hardware slide switches for DeltaDisplay + the stability detector and for integration time instead (docs/MODELS.md).
+`pe_eeprom.py set in out --stability-detector off --auto-zero off`; shipped value `F8` = all three on. The PE200 family has hardware slide switches for DeltaDisplay + the stability detector and for integration time instead (docs/MODELS.md).
 
 ## 5. Known templates (file bytes 2-3 and 20-31)
 

@@ -178,8 +178,8 @@ class Editor:
     def deltadisplay_on(self):
         return self._fw(lambda r: r.__setitem__(28, r[28] | 0x08), 'DeltaDisplay on (file byte 29 bit 3 set)')
 
-    def set_pilot(self, on):
-        return self._fw(lambda r: pe.set_option_bit(r, 4, on), f'unstable pilot {"on" if on else "off"} (file byte 29 bit 4)')
+    def set_stability_detector(self, on):
+        return self._fw(lambda r: pe.set_option_bit(r, 4, on), f'stability detector (SD) {"on" if on else "off"} (file byte 29 bit 4)')
 
     def set_auto_zero(self, on):
         return self._fw(lambda r: pe.set_option_bit(r, 5, on), f'auto zero {"on" if on else "off"} (file byte 29 bit 5)')

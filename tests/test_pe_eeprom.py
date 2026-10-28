@@ -105,16 +105,16 @@ class Editing(unittest.TestCase):
 
 
 class OptionBits(unittest.TestCase):
-    def test_pilot_and_auto_zero_bits(self):
+    def test_stability_detector_and_auto_zero_bits(self):
         with tempfile.TemporaryDirectory() as td:
             out = os.path.join(td, 'o.bin')
-            pe.main(['set', os.path.join(EX, 'pe6000_own.bin'), out, '--pilot', 'off', '--auto-zero', 'off'])
+            pe.main(['set', os.path.join(EX, 'pe6000_own.bin'), out, '--stability-detector', 'off', '--auto-zero', 'off'])
             n = rd(out)
             self.assertTrue(pe.valid(n))
             self.assertEqual(n[29], 0xC8)
             f = pe.fields(n)
-            self.assertTrue(f['pilot_off'] and f['auto_zero_off'] and not f['dd_option_off'])
-            pe.main(['set', out, out, '--pilot', 'on', '--auto-zero', 'on'])
+            self.assertTrue(f['sd_off'] and f['auto_zero_off'] and not f['dd_option_off'])
+            pe.main(['set', out, out, '--stability-detector', 'on', '--auto-zero', 'on'])
             self.assertEqual(rd(out), ex('pe6000_own.bin'))
 
 
