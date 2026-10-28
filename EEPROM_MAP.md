@@ -52,7 +52,7 @@ it was accepted. The tool changes **only** the checksum byte of the block you to
 | 23, 22, 25 [22,23,24] | **X = calibration weight** in internal units, 24-bit LSB first, **1 unit = 1/8 of a display digit**. PE3000-A 80000 = 10000 digits = 1 kg at 0.1 g; PE3000-B 240000 = 30000 digits = 3 kg; PE6000 160000 = 2 kg; PE16 4 kg. Calibration is accepted if the measured value is within X/32 (+-3.1 %) of X **[rom][hw]** |
 | 24, 27, 26 [25,26,27] | **range limit** (overload) in the same units ~ capacity + 3 %. **Bit 7 of file byte 26 = calibration window X/2 instead of X/32** **[rom]** |
 | 28 [29] | middle byte of the DeltaRange limit (below); `FF` in the PE11..PE6000 family, `53` in the PE360/PE3600 |
-| 29 [28] | low byte of the DeltaRange limit; **or, when no DeltaRange is configured, the option byte** (`F8` in the PE11..PE6000 family). A **set bit means the feature is on**: **bit 3 DeltaDisplay** (4), **bit 4 stability detector (SD)**, **bit 5 auto zero**; bits 0-2, 6, 7 are not used by any code path found |
+| 29 [28] | low byte of the DeltaRange limit; **or, when no DeltaRange is configured, the option byte** (`F8` in the PE11..PE6000 family). A **set bit means the feature is on**: **bit 3 DeltaDisplay** (4), **bit 4 stability detector (SD)**, **bit 5 auto zero**; **bits 0-2, 6 and 7 do nothing** (see below) |
 | 30 [31] | template checksum |
 | 31 [30] | top byte of the DeltaRange limit: `07` in the PE360/PE3600; **`7F` in all other dumps = no DeltaRange** (low 7 bits 7F makes byte 29 the option byte) **[rom][emu]** |
 
@@ -107,6 +107,11 @@ A data-output request from the interface (RAM 0x7D bit 4) is served by SUB_D5F (
 unstable flag, to the interface (R1 = 0x20 at 0x0DA), so stability is *reported* to the interface. The "blocks the data output until stable" of the manual is therefore either done by the interface card from that status bit, or
 by the hardware stability-detector switch of the PE200 family; I could not find it in the main firmware. The emulator has no interface card, so the actual transmission was not exercised.
 
+**Bits 0-2, 6 and 7 are unused [rom][emu].** RAM 0xD5 (`~byte 29`) is read at only four places and they test only bits 3, 4 and 5 (0x7E8 for bit 3, 0x5AC and 0x75D for bit 4, 0x6B2 for bit 5); RAM 0x3C, the copy of
+the byte itself, is read only at 0x8D5 (as the low byte of the DeltaRange limit, which with byte 31 = 7F is 0x7FFFxx, far above any reading) and 0xE78. Emulator, PE6000 image, noise, rest, two load steps and unloading:
+byte 29 = F9, FA, FC, B8, 78 and FF all execute exactly the same instructions as F8 and give identical display frames (400 of 400); only RAM 0x3C, 0x3F (checksum) and 0xD5 differ. A value that clears bits 3-5 (00) changes the execution, as it should.
+The scenario does not include keys, units, TARE, calibration, test mode or the data interface, but the static references above cover those too.
+
 `pe_eeprom.py set in out --stability-detector off --auto-zero off`; shipped value `F8` = all three on. The PE200 family has hardware slide switches for DeltaDisplay + the stability detector and for integration time instead (docs/MODELS.md).
 
 ## 5. Known templates (file bytes 2-3 and 20-31)
@@ -132,4 +137,4 @@ CAL regenerates record 1. Scratch bytes 0-1 are rewritten on every standby.
 
 * the "faster weighing-in" half of Fastmode (service bulletin ME-701763): candidates are threshold / band / filter row in file byte 21
   (see `research/RESULTS.md` for sweeps), none confirmed;
-* file bytes 12-19, what bits 0-2, 6 and 7 of the option byte do (probably nothing), the exact use of the filter-row table.
+* file bytes 12-19, the exact use of the filter-row table.

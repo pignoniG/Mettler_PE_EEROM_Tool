@@ -69,6 +69,8 @@ Ramp inputs (fast: 1 count per 1500 cycles, slow: 1 count per 60000 cycles) on t
 * Bit 5 clear: the zero-tracking branch at ROM 0x6B4-0x6CF is never executed (203 passes with the bit set, 0 with it clear). With noise, the zero reference RAM 0x51 is stepped back by one unit
   per pass when the bit is set and stays where it drifted when it is clear; at the displayed resolution the readings were the same. This is the auto zero.
 
+* Bits 0-2, 6, 7 of file byte 29: F9, FA, FC, B8, 78 and FF run exactly the same code path as F8 and give identical display frames (400 of 400); only RAM 0x3C, 0x3F and 0xD5 differ. They are unused.
+
 ## Fastmode - no EEPROM lever found
 
 The service bulletin ME-701763 ties the faster Fastmode to the ME-47455 processor and its own bar-code table. Nothing in the EEPROM, tried one byte
