@@ -205,7 +205,7 @@ class App:
         note(disp, 10, 'File byte 29 bit 4: the stability detector (SD) pilot of the manuals, a segment in the leftmost position that lights while the reading moves. Off = never lights.')
         ttk.Checkbutton(disp, text='Auto zero', variable=self.az_var,
                         command=lambda: self.ed_apply(self.ed.set_auto_zero, self.az_var.get())).grid(row=11, column=0, columnspan=4, sticky='w')
-        note(disp, 12, 'File byte 29 bit 5: slowly tracks the zero reading in steps of 1/8 digit while the reading stays inside a small band around zero. Off = zero only changes with TARE. (The service manual lists 'no auto zero' for Test mode.)')
+        note(disp, 12, 'File byte 29 bit 5: slowly tracks the zero reading in steps of 1/8 digit while the reading stays inside a small band around zero. Off = zero only changes with TARE. (The service manual lists "no auto zero" for Test mode.)')
         ttk.Label(disp, text='DeltaRange fine range (digits)').grid(row=5, column=0, columnspan=2, sticky='w')
         self.fine_var = tk.StringVar()
         ttk.Entry(disp, textvariable=self.fine_var, width=9).grid(row=5, column=2, sticky='w')
