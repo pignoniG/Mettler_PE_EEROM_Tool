@@ -210,7 +210,7 @@ class App:
             ttk.Label(cal, text=lab).grid(row=r * 2, column=0, sticky='w')
             ttk.Entry(cal, textvariable=var, width=11).grid(row=r * 2, column=1, sticky='w', padx=4)
             ttk.Button(cal, text='Set', width=4, command=fn).grid(row=r * 2, column=2, sticky='w')
-            note(cal, r * 2 + 1, ('The weight the balance asks for when you calibrate, in display digits: 10000 digits at 0.1 g = 1 kg, '
+            note(cal, r * 2 + 1, ('The weight the balance asks for when you calibrate, in display digits (this is what distinguishes Normal from Certification mode; a certified balance additionally has jumper ST4 fitted, which blocks calibration in hardware): 10000 digits at 0.1 g = 1 kg, '
                                   '30000 = 3 kg. Calibration is refused if the weight on the pan is outside the window below.' if r == 0 else
                                   'Reading above which the balance shows overload, in display digits (about capacity + 3 %).'))
         ttk.Checkbutton(cal, text='Wide calibration window (+-50 % instead of +-3.1 %)', variable=self.win_var,

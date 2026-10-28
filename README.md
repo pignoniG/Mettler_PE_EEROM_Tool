@@ -20,7 +20,7 @@ swapped (file byte *i* = firmware byte *i XOR 1*), explained in section 0 of tha
 
 > **Working on a balance is your responsibility.** These are measuring instruments. Save your original dump before
 > writing anything and keep it. If your instrument is legal-for-trade or otherwise verified, changing calibration data
-> invalidates that - and nothing here can make an instrument certified: no certification flag has been identified.
+> invalidates that - and nothing here can make an instrument certified. Certified balances block user calibration with a hardware short-circuit plug (ST4), not an EEPROM bit.
 
 ## What it can do
 

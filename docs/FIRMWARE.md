@@ -64,6 +64,6 @@ constants selected by the unit nibble and the code in file byte 20. Message stri
 
 ## Inputs seen by the code (from the schematic and the code)
 
-P1.0 and P1.2 are read at power-on (0xE87): in the emulator, holding P1.0 low (the key line on the schematic) at power-on enters the
+**P1.2 is the calibration/unit-selection lock** (service-manual plug ST4 on certified balances; the CAL routine at 0x905 and the unit selection at 0xE87 both exit when it is low). P1.0 and P1.2 are read at power-on (0xE87): in the emulator, holding P1.0 low (the key line on the schematic) at power-on enters the
 unit-selection state (which rewrites the saved unit, so use `Scale.power_on()` for tests), and releasing it continues to weighing; with P1.0 high the firmware goes to standby (display `OFF`). The
 interrupt routine also samples P1 bits 2-3 (0x1D2-0x1F3), and the data-interface option is polled with MOVX at 0x3F.

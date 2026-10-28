@@ -60,10 +60,16 @@ it was accepted. The tool changes **only** the checksum byte of the block you to
 
 ## 3. Normal / Certification mode, 1 kg vs 3 kg
 
-* No "certified" flag has been found. The French PE3000 asks for **3 kg** because X is 3 kg; the other PE3000 asks 1 kg.
+* **The certification lock is a hardware jumper, not an EEPROM bit.** The service manual (155453037-PE-SM, sections 2.3 and the fault table) says that in a
+  certified balance calibration (and unit selection) "can be blocked by setting a short-circuit plug on **ST4**" of the balance P/C board. The firmware agrees:
+  the calibration routine (0x905) and the unit-selection path (0xE87) both start by reading port P1 bit 2 and bail out when it is low **[rom]** - ST4 very
+  probably pulls P1.2 to ground (inferred from the code; trace it on your board). So an EEPROM edit can neither lock nor unlock calibration; remove or fit ST4.
+* **Normal vs Certification mode "is simply the calibration weight"** (service manual): a practical weight in Normal mode, the certification-standard weight in
+  Certification mode. That is the X field above. Reading a bar code also cancels the stored calibration factor, and each mode has its own bar-code set.
+* Earlier text: no "certified" flag has been found in the EEPROM. The French PE3000 asks for **3 kg** because X is 3 kg; the other PE3000 asks 1 kg.
   Changing X (GUI "Cal. weight", or `set --x-digits 10000`) changes the weight the balance wants at calibration. The window is
   +-3.1 %, so calibrating the 3 kg template with 1 kg is refused; with the 1 kg template it is accepted **[hw]**.
-* What separates Normal from Certification mode in the EEPROM is still unknown. Nothing here makes a balance legal for trade.
+* Nothing here makes a balance legal for trade.
 
 ## 4. DeltaDisplay (last digit blanking while the reading moves)  [rom] [emu] [hw]
 
@@ -98,7 +104,6 @@ CAL regenerates record 1. Scratch bytes 0-1 are rewritten on every standby.
 
 ## 7. Not known
 
-* what Normal vs Certification changes;
 * the "faster weighing-in" half of Fastmode (service bulletin ME-701763): candidates are threshold / band / filter row in file byte 21
   (see `research/RESULTS.md` for sweeps), none confirmed;
 * file bytes 12-19, 28 and the exact use of the filter-row table.
