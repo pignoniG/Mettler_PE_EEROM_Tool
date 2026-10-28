@@ -63,6 +63,12 @@ Ramp inputs (fast: 1 count per 1500 cycles, slow: 1 count per 60000 cycles) on t
 * **A ROM patch would change it** (not possible on the mask-ROM part, emulator only): setting the constant at 0x1CE to 0x0F gives 74 updates, to 0x0A gives 109 - the update rate is simply proportional to 1/passes.
   Fewer passes per reading means less averaging and so a noisier last digit, which the adaptive filter only partly hides.
 
+## Option byte bits 4 and 5 (file byte 29)
+
+* Bit 4 clear: the leftmost display segment (bit 3 of the first display byte, `89` vs `81`) never lights while the reading is moving - the stability-detector pilot.
+* Bit 5 clear: the zero-tracking branch at ROM 0x6B4-0x6CF is never executed (203 passes with the bit set, 0 with it clear). With noise, the zero reference RAM 0x51 is stepped back by one unit
+  per pass when the bit is set and stays where it drifted when it is clear; at the displayed resolution the readings were the same. This is the auto zero.
+
 ## Fastmode - no EEPROM lever found
 
 The service bulletin ME-701763 ties the faster Fastmode to the ME-47455 processor and its own bar-code table. Nothing in the EEPROM, tried one byte

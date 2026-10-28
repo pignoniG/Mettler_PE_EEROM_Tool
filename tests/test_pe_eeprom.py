@@ -104,6 +104,20 @@ class Editing(unittest.TestCase):
             self.assertEqual([(i, o[i], n[i]) for i in range(32) if o[i] != n[i]], [(29, 0xF8, 0xF0), (30, 0x06, 0x0E)])
 
 
+class OptionBits(unittest.TestCase):
+    def test_pilot_and_auto_zero_bits(self):
+        with tempfile.TemporaryDirectory() as td:
+            out = os.path.join(td, 'o.bin')
+            pe.main(['set', os.path.join(EX, 'pe6000_own.bin'), out, '--pilot', 'off', '--auto-zero', 'off'])
+            n = rd(out)
+            self.assertTrue(pe.valid(n))
+            self.assertEqual(n[29], 0xC8)
+            f = pe.fields(n)
+            self.assertTrue(f['pilot_off'] and f['auto_zero_off'] and not f['dd_option_off'])
+            pe.main(['set', out, out, '--pilot', 'on', '--auto-zero', 'on'])
+            self.assertEqual(rd(out), ex('pe6000_own.bin'))
+
+
 class DeltaRange(unittest.TestCase):
     def test_forum_pe360_and_pe3600_carry_a_60000_digit_fine_range(self):
         for fn in ('pe360_forum.bin', 'pe3600_forum.bin'):
