@@ -76,6 +76,11 @@ Ramp inputs (fast: 1 count per 1500 cycles, slow: 1 count per 60000 cycles) on t
 Setting each of them to FF and to 55 (checksums unchanged, they are not covered): same instructions executed, 400 of 400 identical display frames; only the matching RAM 0x2C-0x33 differs. The firmware
 never reads them as parameters; they are written only by the interface commands R and U. See docs/FIRMWARE.md.
 
+## File byte 28
+
+With byte 31 = 7F, twelve values (FF, 00, single bits, 53, 7F) give identical displays. With a DeltaRange limit (byte 29 = 00, byte 31 = 00), byte 28 is the middle byte: 07 (224 digits), 0B (352) blank the last digit of a 356-digit reading;
+0D (416), 0E (448), 1F (992) do not, but still blank a 1067-digit reading; 2F (1504), 4F, 8F do not blank either. Each bit adds 32 x 2^bit digits.
+
 ## Fastmode - no EEPROM lever found
 
 The service bulletin ME-701763 ties the faster Fastmode to the ME-47455 processor and its own bar-code table. Nothing in the EEPROM, tried one byte
