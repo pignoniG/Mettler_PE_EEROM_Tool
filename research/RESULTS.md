@@ -93,3 +93,21 @@ byte 20 bits 3-7 and byte 21 bit 7 (outside calibration) have no effect; X (byte
 The service bulletin ME-701763 ties the faster Fastmode to the ME-47455 processor and its own bar-code table. Nothing in the EEPROM, tried one byte
 at a time, produces a markedly faster settling than the PE6000/PE16 values; the DeltaDisplay half of Fastmode is the byte 29 bit 3 option.
 Combinations of two bytes and the real counter hardware are not modelled, so a lever could still hide there.
+
+
+## What the large-range display path does (file byte 26 low 7 bits >= 13)
+
+ROM 0xB58 (SUB_B58, called once per display pass from 0x487) is a **moving-average stage on the weighing value**; byte 26 (RAM 0x3B) is tested at 0xB6A (`ANL #7F; ADD #F3; JC`).
+
+* **Limit top byte < 13 (PE3000, PE6000...)**: R4/R5 are forced to 8/3 and the routine returns at once unless bit 4 of the mode byte RAM 0x82 is set. In normal weighing that bit is 0, so **no extra averaging happens**.
+* **Limit top byte >= 13 (PE16/PE1600, PE360/PE3600)**: the routine always runs. It keeps a ring of recent values (RAM 0x9F is the ring position, 0xA0 a flush counter that is set to the window length when a weight step is detected, so the average restarts on a step). The window is **4 samples, or 8 samples when the filter row (file byte 21 bits 4-5) is 3** (R4 = 8, R5 = 3 shift; otherwise 4 and 2).
+* Emulator test (PE6000 image, limit byte 26 changed 07 -> 13, filter row 0-3, load step 200 -> 600 counts, 120 display frames at rest):
+
+| noise (counts rms) | path | row 0-2 jitter / settle | row 3 jitter / settle |
+|---|---|---|---|
+| 0.4 | small | 0.5 digits / 1.0 s | 0 / 1.4 s |
+| 0.4 | large | 0.5 digits / 1.0 s | 0 / 1.4 s |
+| 2.0 | small | 0.6-1.0 digits / 1.0 s | 0.68 / 1.8 s |
+| 2.0 | large | 0.75-1.0 digits / 0.8-1.0 s | 0.44 / 2.6 s |
+
+So the large-range path gives **extra smoothing only visibly with filter row 3** (about 0.8 s slower settling, less jitter); rows 0-2 are indistinguishable from the small path at this noise level (single noise seed). It is a filter detail, not a different resolution or range: the displayed value is unchanged (10666 in all cases). Emulator only; not tried on a real balance.
