@@ -72,6 +72,24 @@ Columns: what the firmware does is from the code; the **Schematic** text in the 
    reads and writes the low byte of each word first.
 4. **Power-on**: `OUTL BUS,0`; `ANL P2,#F8` (P2.0-2 low); a P2.2 pulse; then the 16-word EAROM read (0xE1F) and the integrity check (0xCA4).
 
+## What IC6 is
+
+IC6 (the "Counter and Timebase" block) has **no part type anywhere in the documents I have**. The ES-47452 drawing has a type table (IC3 LM393NA, IC4 "8050", IC5 "2801", IC7 OP-07EP, IC8 LM358, IC9 LM393) and the IC6 row holds only a dash, with supply +5 V on pin 28 and 0 V on pin 14. The ES-45785 drawing just prints "IC 6". It is most likely a **custom Mettler 28-pin LSI** (a ramp A/D converter back end), not a catalogue part. Its pins as drawn:
+
+| pins | name | connected to |
+|---|---|---|
+| 28, 25 | Vcc, SRT1 | +5 V |
+| 14, 27, 13, 12 | Vss, SRT2, INP1, IMP2 | 0 V |
+| 3 | /CS | 0 V through 4.7 kohm |
+| 19 | PWM | ramp comparator output (waveform P2) |
+| 15 | RAR | ramp reset (R38 / R39, waveform P1) |
+| 24, 25 | SW1, /SW1 | the current switches (waveform P3/P4) |
+| 18, 17 | XTAL1, XTAL2 | 4.915 MHz crystal (shared with the CPU) |
+| 4-11 | DB0-DB7 | CPU bus (port 0) |
+| 1, 2, 16, 21 | /L/H, /RD, /INT, /WC/TC | CPU P1.5, P1.4, INT, P1.1 |
+
+Nothing on the schematics says how it counts internally; what is known is only what the firmware does with it (three reads per interrupt, see above). A replacement part would have to be reverse engineered from its behaviour or taken from a donor board.
+
 ## What is not known
 
 * What the optional data-interface card plugged into Ku1 does with T0, T1, P1.6, P1.7, P2.6, P2.7 (the card is not in the manuals I have). Ku1 also carries `/Reset` (A6), `Disable` (B6), +25 V (A2), +5 V (B2) and 0 V (A1, B1).
